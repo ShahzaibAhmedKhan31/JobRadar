@@ -1,0 +1,292 @@
+{
+  "label": "Synthetic sample listings",
+  "notice": "Every entry in this file is fabricated for development and demos. Companies, URLs and descriptions are fictional. Rows are stored with is_test_data=true and are hidden from dashboard metrics unless test data is explicitly included.",
+  "jobs": [
+    {
+      "source_job_id": "fx-1001",
+      "title": "Senior Backend Engineer",
+      "company_name": "Northwind Analytics",
+      "location": "Karachi, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 3,
+      "job_url": "https://jobs.example.com/northwind-analytics/senior-backend-engineer",
+      "description": "Design and operate Python services that power our analytics platform. You will own API design, PostgreSQL schema evolution and background processing. Stack: Python, FastAPI, PostgreSQL, Docker. Hybrid role with two office days per week in Karachi."
+    },
+    {
+      "source_job_id": "fx-1002",
+      "title": "Full Stack Developer",
+      "company_name": "BrightPath Health",
+      "location": "Lahore, Pakistan",
+      "work_arrangement": "onsite",
+      "experience_level": "associate",
+      "posted_hours_ago": 6,
+      "job_url": "https://jobs.example.com/brightpath-health/full-stack-developer",
+      "description": "Build patient-facing scheduling features with React, Next.js and TypeScript on top of a Django REST API. On-site team in Lahore. Two years of professional experience with JavaScript and Python preferred."
+    },
+    {
+      "source_job_id": "fx-1003",
+      "title": "Data Engineer",
+      "company_name": "Orbit Freight",
+      "location": "Remote (Pakistan)",
+      "work_arrangement": "remote",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 11,
+      "job_url": "https://jobs.example.com/orbit-freight/data-engineer",
+      "description": "Own batch and streaming pipelines for logistics data using Python, Airflow and dbt on top of PostgreSQL and Snowflake. Fully remote within Pakistan, quarterly on-site meetups in Islamabad."
+    },
+    {
+      "source_job_id": "fx-1004",
+      "title": "QA Automation Engineer",
+      "company_name": "Cobalt Financial",
+      "location": "Islamabad, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "associate",
+      "posted_hours_ago": 20,
+      "job_url": "https://jobs.example.com/cobalt-financial/qa-automation-engineer",
+      "description": "Write end-to-end and API test suites with Playwright and pytest for a fintech platform. Partner with developers on CI quality gates using GitHub Actions. Hybrid, three days on-site in Islamabad."
+    },
+    {
+      "source_job_id": "fx-1005",
+      "title": "DevOps Engineer",
+      "company_name": "Nimbus Labs",
+      "location": "Remote (Worldwide)",
+      "work_arrangement": "remote",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 27,
+      "job_url": "https://jobs.example.com/nimbus-labs/devops-engineer",
+      "description": "Operate Kubernetes clusters and Terraform-managed AWS infrastructure for a developer-tools company. Improve observability with Prometheus and Grafana. Async-first remote team across four time zones."
+    },
+    {
+      "source_job_id": "fx-1006",
+      "title": "Product Manager, Growth",
+      "company_name": "Kite Commerce",
+      "location": "Dubai, United Arab Emirates",
+      "work_arrangement": "hybrid",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 34,
+      "job_url": "https://jobs.example.com/kite-commerce/product-manager-growth",
+      "description": "Own the growth roadmap for a regional e-commerce platform. Run discovery, define experiments and partner with engineering on checkout improvements. Hybrid role based in Dubai with relocation support."
+    },
+    {
+      "source_job_id": "fx-1007",
+      "title": "Junior Python Developer",
+      "company_name": "GreenLedger",
+      "location": "Karachi, Pakistan",
+      "work_arrangement": "onsite",
+      "experience_level": "entry",
+      "posted_hours_ago": 41,
+      "job_url": "https://jobs.example.com/greenledger/junior-python-developer",
+      "description": "Join a sustainability reporting startup and build internal automation with Python and FastAPI. Mentored role for recent graduates; exposure to PostgreSQL, pytest and Docker is a plus."
+    },
+    {
+      "source_job_id": "fx-1008",
+      "title": "Frontend Engineer",
+      "company_name": "Tessera Studio",
+      "location": "Berlin, Germany",
+      "work_arrangement": "remote",
+      "experience_level": "associate",
+      "posted_hours_ago": 52,
+      "job_url": "https://jobs.example.com/tessera-studio/frontend-engineer",
+      "description": "Craft accessible interfaces in React and TypeScript for a design-tooling product. Strong CSS and component-library experience required. Remote within the EU; German language not required."
+    },
+    {
+      "source_job_id": "fx-1009",
+      "title": "Machine Learning Engineer",
+      "company_name": "Vantage Robotics",
+      "location": "Singapore",
+      "work_arrangement": "onsite",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 66,
+      "job_url": "https://jobs.example.com/vantage-robotics/machine-learning-engineer",
+      "description": "Train and deploy perception models with PyTorch for warehouse robotics. Experience with Python, computer vision and model optimization for edge devices. On-site lab in Singapore."
+    },
+    {
+      "source_job_id": "fx-1010",
+      "title": "Data Analyst",
+      "company_name": "Northwind Analytics",
+      "location": "Karachi, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "entry",
+      "posted_hours_ago": 78,
+      "job_url": "https://jobs.example.com/northwind-analytics/data-analyst",
+      "description": "Turn product data into decisions with SQL, Python and dashboards. You will maintain reporting models and partner with the growth team. Hybrid in Karachi; one year of analyst experience preferred."
+    },
+    {
+      "source_job_id": "fx-1011",
+      "title": "Site Reliability Engineer",
+      "company_name": "Nimbus Labs",
+      "location": "Remote (Worldwide)",
+      "work_arrangement": "remote",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 95,
+      "job_url": "https://jobs.example.com/nimbus-labs/site-reliability-engineer",
+      "description": "Improve reliability for a high-traffic API platform. Define service-level objectives, lead incident reviews and build tooling in Go and Python. Remote-first with on-call rotation compensation."
+    },
+    {
+      "source_job_id": "fx-1012",
+      "title": "Cloud Solutions Architect",
+      "company_name": "Atlas Cloud Partners",
+      "location": "London, United Kingdom",
+      "work_arrangement": "hybrid",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 110,
+      "job_url": "https://jobs.example.com/atlas-cloud-partners/cloud-solutions-architect",
+      "description": "Guide enterprise customers through AWS migrations and landing-zone design. Requires hands-on Terraform, networking and security experience plus customer-facing communication skills. Hybrid in London."
+    },
+    {
+      "source_job_id": "fx-1013",
+      "title": "Engineering Manager, Platform",
+      "company_name": "Kite Commerce",
+      "location": "Dubai, United Arab Emirates",
+      "work_arrangement": "onsite",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 128,
+      "job_url": "https://jobs.example.com/kite-commerce/engineering-manager-platform",
+      "description": "Lead a team of eight platform engineers building payment and inventory services. Balance delivery with coaching; prior people-management experience required. On-site in Dubai."
+    },
+    {
+      "source_job_id": "fx-1014",
+      "title": "Technical Writer",
+      "company_name": "Tessera Studio",
+      "location": "Remote (Europe)",
+      "work_arrangement": "remote",
+      "experience_level": "associate",
+      "posted_hours_ago": 139,
+      "job_url": "https://jobs.example.com/tessera-studio/technical-writer",
+      "description": "Document APIs and design workflows for a developer-tools product. You will write reference guides, tutorials and release notes, working closely with engineers. Remote within Europe."
+    },
+    {
+      "source_job_id": "fx-1015",
+      "title": "Business Intelligence Analyst",
+      "company_name": "Cobalt Financial",
+      "location": "Islamabad, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "associate",
+      "posted_hours_ago": 151,
+      "job_url": "https://jobs.example.com/cobalt-financial/business-intelligence-analyst",
+      "description": "Build Looker dashboards and SQL models for lending operations. Partner with risk and finance teams to define metrics. Hybrid role in Islamabad; financial-services experience is a plus."
+    },
+    {
+      "source_job_id": "fx-1016",
+      "title": "Android Developer",
+      "company_name": "BrightPath Health",
+      "location": "Lahore, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "associate",
+      "posted_hours_ago": null,
+      "job_url": "https://jobs.example.com/brightpath-health/android-developer",
+      "description": "Extend our patient mobile app with Kotlin and Jetpack Compose. Work with designers and backend engineers on offline-first features. Publication date was not provided by the feed."
+    },
+    {
+      "source_job_id": "fx-1017",
+      "title": "Junior Data Scientist",
+      "company_name": "Vantage Robotics",
+      "location": "Remote (Asia)",
+      "work_arrangement": "remote",
+      "experience_level": "entry",
+      "posted_hours_ago": 8,
+      "job_url": "https://jobs.example.com/vantage-robotics/junior-data-scientist",
+      "description": "Support perception experiments with Python, pandas and scikit-learn. Build reproducible notebooks and evaluation scripts. Remote within Asia; visa not required."
+    },
+    {
+      "source_job_id": "fx-1018",
+      "title": "Platform Engineer",
+      "company_name": "Orbit Freight",
+      "location": "Amsterdam, Netherlands",
+      "work_arrangement": "hybrid",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 31,
+      "job_url": "https://jobs.example.com/orbit-freight/platform-engineer",
+      "description": "Build internal developer tooling, CI/CD templates and Kubernetes operators in Go. Improve deployment lead time for forty engineers. Hybrid in Amsterdam with relocation assistance."
+    },
+    {
+      "source_job_id": "fx-1019",
+      "title": "Cybersecurity Analyst",
+      "company_name": "Meridian Insurance Group",
+      "location": "Karachi, Pakistan",
+      "work_arrangement": "onsite",
+      "experience_level": "associate",
+      "posted_hours_ago": 23,
+      "job_url": "https://jobs.example.com/meridian-insurance/cybersecurity-analyst",
+      "description": "Monitor SIEM alerts, triage incidents and run vulnerability reviews for an insurance group. Familiarity with Splunk, OWASP Top 10 and ISO 27001 controls. On-site in Karachi."
+    },
+    {
+      "source_job_id": "fx-1020",
+      "title": "UX Designer",
+      "company_name": "GreenLedger",
+      "location": "Remote (Pakistan)",
+      "work_arrangement": "remote",
+      "experience_level": "associate",
+      "posted_hours_ago": 57,
+      "job_url": "https://jobs.example.com/greenledger/ux-designer",
+      "description": "Design reporting workflows for sustainability teams in Figma. Run usability tests with enterprise customers and maintain the design system. Remote within Pakistan."
+    },
+    {
+      "source_job_id": "fx-1021",
+      "title": "Backend Engineer",
+      "company_name": "Tessera Studio",
+      "location": "Remote (Worldwide)",
+      "work_arrangement": "remote",
+      "experience_level": "associate",
+      "posted_hours_ago": 17,
+      "job_url": "https://jobs.example.com/tessera-studio/backend-engineer",
+      "description": "Extend a Node.js and PostgreSQL API for a collaborative design product. Focus on real-time collaboration and background jobs. Fully remote, overlap with CET required."
+    },
+    {
+      "source_job_id": "fx-1022",
+      "title": "Senior Backend Engineer",
+      "company_name": "Northwind Analytics",
+      "location": "Karachi, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 3,
+      "job_url": "https://jobs.example.com/northwind-analytics/senior-backend-engineer-reposted",
+      "description": "Design and operate Python services that power our analytics platform. This is the same role as our earlier posting, republished to refresh the listing date. Python, FastAPI, PostgreSQL, Docker."
+    },
+    {
+      "source_job_id": "fx-1023",
+      "title": "Data Engineer",
+      "company_name": "Orbit Freight",
+      "location": "Remote (Pakistan)",
+      "work_arrangement": "remote",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 11,
+      "job_url": "https://jobs.example.com/orbit-freight/data-engineer-reposted",
+      "description": "Own batch and streaming logistics pipelines with Python, Airflow and dbt on PostgreSQL. Reposted listing of the same opening. Remote within Pakistan."
+    },
+    {
+      "source_job_id": "fx-1024",
+      "title": "Scrum Master",
+      "company_name": "Kite Commerce",
+      "location": "Karachi, Pakistan",
+      "work_arrangement": "hybrid",
+      "experience_level": "associate",
+      "posted_hours_ago": 88,
+      "job_url": "https://jobs.example.com/kite-commerce/scrum-master",
+      "description": "Coach three squads on agile delivery, facilitate ceremonies and remove blockers. CSM or PSM certification preferred. Hybrid in Karachi."
+    },
+    {
+      "source_job_id": "fx-1025",
+      "title": "AI Engineer, LLM Applications",
+      "company_name": "Meridian Insurance Group",
+      "location": "Remote (Worldwide)",
+      "work_arrangement": "remote",
+      "experience_level": "mid_senior",
+      "posted_hours_ago": 14,
+      "job_url": "https://jobs.example.com/meridian-insurance/ai-engineer-llm-applications",
+      "description": "Ship retrieval-augmented assistants for claims teams using Python, FastAPI and vector search. Evaluate prompt quality and guardrails. Remote-first team, async communication."
+    },
+    {
+      "source_job_id": "fx-1026",
+      "title": "Junior Frontend Developer",
+      "company_name": "Atlas Cloud Partners",
+      "location": "Manchester, United Kingdom",
+      "work_arrangement": "onsite",
+      "experience_level": "entry",
+      "posted_hours_ago": null,
+      "job_url": "https://jobs.example.com/atlas-cloud-partners/junior-frontend-developer",
+      "description": "Build internal dashboards with React and TypeScript while learning our cloud cost tooling. Publication date unknown for this feed entry. On-site in Manchester with study support."
+    }
+  ]
+}

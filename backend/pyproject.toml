@@ -1,0 +1,37 @@
+[project]
+name = "jobradar-backend"
+version = "0.1.0"
+description = "JobRadar API — personal job discovery and application tracking"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "postgres: test requires a live PostgreSQL instance",
+]
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+ignore = [
+    "B008",  # FastAPI Depends/Query in argument defaults is idiomatic
+    "RUF001", # en dash in docstrings is intentional
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/env.py" = ["E402"]
+"tests/*" = ["E501"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/models/*", "app/schemas/*"]
