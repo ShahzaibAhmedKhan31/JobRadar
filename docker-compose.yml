@@ -1,0 +1,31 @@
+# PostgreSQL only — the FastAPI backend and Next.js frontend run directly on
+# your machine so they are easy to debug.
+name: jobradar
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobradar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jobradar}
+      POSTGRES_USER: ${POSTGRES_USER:-jobradar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobradar}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - jobradar_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-jobradar} -d ${POSTGRES_DB:-jobradar}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  jobradar_postgres_data:
+    name: jobradar_postgres_data
