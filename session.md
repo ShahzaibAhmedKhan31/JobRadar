@@ -10,7 +10,10 @@
 > **Current PR:** [#2](https://github.com/ShahzaibAhmedKhan31/JobRadar/pull/2)
 > (`arena/199744a1-jobradar` → `main`). The MVP itself is already merged on
 > `main` via PR #1. Commits on this branch:
-> `1a31385` backend/adapter/docs · `0d9a8e3` frontend · `6feece3` this file.
+> `1a31385` backend/adapter/docs · `0d9a8e3` frontend · `6feece3` this file ·
+> `650b093` proxy diagnosis · `cf1660a` UI auto-recovery · `d1ec936` schema guard ·
+> `725c699` refresh sends the on-screen filters · `071b148` sample data opt-in ·
+> `116155b` refresh always searches somewhere + `/api/jobs/prune`.
 
 ---
 
