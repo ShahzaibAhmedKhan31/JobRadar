@@ -74,8 +74,8 @@ def build_registry(settings: Settings) -> SourceRegistry:
 
     registry = SourceRegistry(
         [
-            LinkedInSourceAdapter(),
-            IndeedSourceAdapter(),
+            LinkedInSourceAdapter(settings),
+            IndeedSourceAdapter(settings),
             ManualImportSourceAdapter(),
             FixtureSourceAdapter(),
         ]

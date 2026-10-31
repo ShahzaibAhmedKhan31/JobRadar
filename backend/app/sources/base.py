@@ -65,9 +65,15 @@ class NormalizedJob:
     experience_level: ExperienceLevel = ExperienceLevel.UNKNOWN
     description: str | None = None
     published_at: datetime | None = None
+    #: True when the provider only exposes a calendar date (e.g. LinkedIn's
+    #: "posted 2 days ago"). ``published_at`` is then midnight UTC of that day
+    #: and freshness filters treat the whole day as inside the window.
+    published_at_is_date_only: bool = False
 
     def __post_init__(self) -> None:
         self.published_at = ensure_utc(self.published_at)
+        if self.published_at is None:
+            self.published_at_is_date_only = False
 
     @classmethod
     def from_mapping(cls, data: dict[str, object]) -> NormalizedJob:
@@ -92,6 +98,7 @@ class NormalizedJob:
                 if isinstance(data.get("published_at"), datetime)
                 else None
             ),
+            published_at_is_date_only=bool(data.get("published_at_is_date_only")),
         )
 
 
@@ -102,6 +109,8 @@ class FetchResult:
     jobs: list[NormalizedJob] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     pages_fetched: int = 0
+    #: Retrieval problems reported by the provider (not row-level rejects).
+    errors: list[str] = field(default_factory=list)
 
     def __len__(self) -> int:  # pragma: no cover - convenience
         return len(self.jobs)
@@ -120,6 +129,8 @@ class SourceAdapter(ABC):
     docs_url: str | None = None
     #: Environment variables a live integration would need.
     required_config: tuple[str, ...] = ()
+    #: Shell command that enables this adapter (shown in the UI when it is off).
+    setup_command: str | None = None
 
     @property
     def can_refresh(self) -> bool:
@@ -145,4 +156,5 @@ class SourceAdapter(ABC):
             "is_test_data": self.is_test_data,
             "docs_url": self.docs_url,
             "required_config": list(self.required_config),
+            "setup_command": self.setup_command,
         }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -12,9 +12,11 @@ from app.core.config import Settings, get_settings
 from app.core.constants import FetchRunStatus, RefreshTrigger
 from app.core.errors import BadRequestError
 from app.core.logging import get_logger
+from app.core.text import split_terms
 from app.core.time import ensure_utc, utcnow
 from app.models.fetch_run import JobFetchRun
 from app.services.ingestion import ingest_many
+from app.services.search_settings import get_settings_row
 from app.sources.base import JobQuery, SourceAdapter
 from app.sources.registry import SourceRegistry
 
@@ -35,6 +37,30 @@ class RefreshOutcome:
     @property
     def updated_jobs(self) -> int:
         return sum(run.updated_jobs_count for run in self.runs)
+
+
+def apply_saved_search(
+    db: Session, query: JobQuery | None, *, settings: Settings | None = None
+) -> JobQuery:
+    """Fill empty search hints from the persisted Search Settings row.
+
+    A manual refresh with no filters should search for *your* saved role titles,
+    location and freshness window instead of scraping an unfiltered board. Any
+    hint supplied in the request wins, so the Discover page can override it.
+    """
+    settings = settings or get_settings()
+    base = query or JobQuery(limit=settings.max_refresh_jobs_per_source)
+    row = get_settings_row(db)
+    if row is None:
+        return base
+
+    return replace(
+        base,
+        titles=base.titles or tuple(split_terms([row.default_titles])),
+        keywords=base.keywords or tuple(split_terms([row.default_keywords])),
+        location=base.location or row.default_location or None,
+        max_age_hours=base.max_age_hours or row.default_posting_age_hours,
+    )
 
 
 def _finish_run(
@@ -78,7 +104,7 @@ def run_refresh(
             "record listings through manual import."
         )
 
-    fetch_query = query or JobQuery(limit=settings.max_refresh_jobs_per_source)
+    fetch_query = apply_saved_search(db, query, settings=settings)
     outcome = RefreshOutcome()
 
     for adapter in targets:
@@ -107,7 +133,18 @@ def run_refresh(
             )
             if result.warnings:
                 outcome.warnings[adapter.key] = result.warnings
-            errors = stats.errors
+            errors = [*result.errors, *stats.errors]
+            if result.errors and not result.jobs:
+                # The provider itself failed and produced nothing: this is a
+                # failed run, not an empty one.
+                _finish_run(
+                    db,
+                    run,
+                    status=FetchRunStatus.FAILED,
+                    error_message="; ".join(errors),
+                )
+                outcome.runs.append(run)
+                continue
             status = FetchRunStatus.SUCCESS if not errors else FetchRunStatus.PARTIAL
             _finish_run(
                 db,

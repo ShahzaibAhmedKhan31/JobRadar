@@ -57,6 +57,8 @@ class JobRead(BaseModel):
     description_snippet: str | None = None
     job_url: str
     published_at: datetime | None = None
+    #: True when the source only reported the posting *date* (LinkedIn).
+    published_at_is_date_only: bool = False
     posting_age_hours: float | None = None
     first_seen_at: datetime
     discovered_age_hours: float
@@ -165,6 +167,7 @@ def job_to_read(
         "description_snippet": snippet(job.description, 220),
         "job_url": job.job_url,
         "published_at": ensure_utc(job.published_at),
+        "published_at_is_date_only": bool(job.published_at_is_date_only),
         "posting_age_hours": posting_age_hours(job),
         "first_seen_at": ensure_utc(job.first_seen_at),
         "discovered_age_hours": round(

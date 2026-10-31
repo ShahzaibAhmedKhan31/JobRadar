@@ -271,7 +271,8 @@ def test_refresh_reports_unavailable_sources(client):
     runs = response.json()["runs"]
     assert [run["status"] for run in runs] == ["skipped", "skipped"]
     assert all(run["error_message"] for run in runs)
-    assert all("Terms" in run["error_message"] or "API" in run["error_message"] for run in runs)
+    # The run history must say *why* nothing was imported and how to opt in.
+    assert all("JOBSPY" in run["error_message"] for run in runs)
 
 
 def test_refresh_rejects_unknown_source(client):

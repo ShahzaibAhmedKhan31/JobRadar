@@ -60,13 +60,14 @@ plus a registry entry. See **[docs/job-sources.md](docs/job-sources.md)**.
 
 | Provider | Status | Notes |
 | --- | --- | --- |
-| `linkedin` | **Unavailable (by design)** | No self-serve public job-search API; partner API is publish-only; scraping violates LinkedIn's User Agreement. |
-| `indeed` | **Unavailable (by design)** | Publisher Job Search API retired; remaining APIs are employer/ATS partner programs; scraping violates Indeed's ToS. |
+| `linkedin` | **Available via opt-in scraping** | Guest search read through [`python-jobspy`](https://pypi.org/project/python-jobspy/); needs `requirements-scraping.txt`. May breach LinkedIn's User Agreement and can be throttled. |
+| `indeed` | **Opt-in required** | Same adapter; add `indeed` to `JOBSPY_SITES` (Indeed's Publisher API was retired in 2020). |
 | `manual_import` | Available (no retrieval) | User-pasted listings, optionally attributed to LinkedIn/Indeed. |
 | `fixtures` | Available | 26 clearly-labelled synthetic listings for demos and tests; flagged `is_test_data`. |
 
-Unavailable sources are never reported as successful imports: a refresh records
-a `skipped` run with the reason.
+A source that cannot run is never reported as a successful import: the refresh
+records a `skipped` run with the reason, and the UI shows the exact command or
+environment variable needed to enable it.
 
 ---
 
@@ -85,7 +86,7 @@ JobRadar/
 │   │   ├── sources/        # base adapter, registry, fixtures/linkedin/indeed/manual_import
 │   │   └── main.py         # FastAPI app, lifespan, CORS, error mapping
 │   ├── alembic/            # env.py + initial migration
-│   ├── tests/              # 84 pytest tests (PostgreSQL by default, SQLite fallback)
+│   ├── tests/              # 121 pytest tests (PostgreSQL by default, SQLite fallback)
 │   ├── alembic.ini
 │   ├── pyproject.toml      # pytest + ruff configuration
 │   ├── requirements.txt
@@ -187,6 +188,8 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
+# optional: enables LinkedIn/Indeed scraping (see the scraping section below)
+pip install -r requirements-scraping.txt
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
@@ -225,11 +228,54 @@ The Next.js server proxies `/api/*` to `http://127.0.0.1:8000` (configurable via
    metrics, or import a real listing with **Import job link** to start your own
    clean dataset.
 
+### 7. (Optional) Turn on LinkedIn scraping
+
+The LinkedIn adapter is real but **opt-in**, because it reads LinkedIn's public
+guest search pages through `python-jobspy` — scraping, not an authorized API.
+That may breach LinkedIn's User Agreement and can be throttled or blocked. Only
+enable it if that trade-off is acceptable to you.
+
+```powershell
+# in the backend venv (from the repository root)
+pip install -r backend/requirements-scraping.txt
+
+# backend/.env — opt in explicitly
+JOBSPY_ENABLED=true
+JOBSPY_SITES=linkedin
+JOBSPY_RESULTS_WANTED=25
+JOBSPY_MAX_SEARCH_TERMS=2
+JOBSPY_REQUEST_DELAY_SECONDS=2
+```
+
+Restart the API, open **Search Settings**, fill in your role titles (e.g.
+`Backend Engineer, Platform Engineer`), keywords and city, then press **Refresh
+sources**. What to expect:
+
+* A healthy run stores new listings and shows `success` in refresh history; the
+  LinkedIn card becomes **Available** and Discover lists the rows with a
+  LinkedIn badge.
+* A throttled or blocked scrape shows the provider message (for example
+  `429 Too Many Requests` or `unexpected page with no jobs (blocked?)`) and the
+  run is `failed` — JobRadar does not retry with a new identity, solve a
+  CAPTCHA, or invent listings.
+* LinkedIn only exposes the posting **date**, so those cards read
+  “date only” and the freshness filter treats the whole day as within the
+  window.
+* Want Indeed too? Add it: `JOBSPY_SITES=linkedin,indeed`.
+* Want scraping gone entirely? Set `JOBSPY_ENABLED=false` (or do not install the
+  extra). Manual import keeps working.
+
+> Verify the live path on your machine after installing: the build environment
+> used to develop this feature could not reach linkedin.com, so the adapter is
+> covered by tests with mocked jobspy responses, not by a live scrape.
+
 ---
 
 ## Everyday workflow
 
-1. **Refresh** a source (or enable automatic refresh in Search Settings).
+1. **Refresh** a source (or enable automatic refresh in Search Settings). With
+   `python-jobspy` installed this searches your saved titles on LinkedIn; without
+   it only the sample feed and manual import are available.
 2. **Discover**: set titles/keywords/location/posting age, apply, then sort by
    best match.
 3. **Shortlist** promising roles; store notes and a priority.
@@ -295,6 +341,15 @@ npm run dev
 | `SCHEDULED_REFRESH_ENABLED` | `false` | Seeds the automatic-refresh toggle in Search Settings |
 | `SCHEDULED_REFRESH_INTERVAL_MINUTES` | `60` | Seeds the default interval (15–1440) |
 | `SCHEDULER_TICK_SECONDS` | `30` | How often the scheduler checks whether a run is due |
+| `JOBSPY_ENABLED` | `true` | Hard switch for the optional scraping adapter; `false` keeps JobRadar offline |
+| `JOBSPY_SITES` | `linkedin` | Comma-separated boards to scrape (`indeed`, `glassdoor`, … to opt in) |
+| `JOBSPY_RESULTS_WANTED` | `25` | Listings requested per search term |
+| `JOBSPY_MAX_SEARCH_TERMS` | `2` | Saved titles/keywords turned into requests (one request each) |
+| `JOBSPY_REQUEST_DELAY_SECONDS` | `2` | Delay between scrape requests (politeness) |
+| `JOBSPY_PROXIES` | *(empty)* | Optional rotating proxies for jobspy |
+| `JOBSPY_COUNTRY` | `pakistan` | Country hint for the Indeed scraper only |
+| `JOBSPY_FETCH_DESCRIPTION` | `false` | Fetch full descriptions (extra request per listing) |
+| `JOBSPY_VERBOSE` | `0` | jobspy log level: 0 quiet, 1 normal, 2 debug |
 
 ### `frontend/.env.local`
 
@@ -394,7 +449,7 @@ than crashing the request. Pagination is capped at 100 items per page.
 cd backend
 .\.venv\Scripts\Activate.ps1
 $env:TEST_DATABASE_URL = "postgresql+psycopg://jobradar:jobradar@localhost:5432/jobradar_test"
-pytest                    # 84 tests
+pytest                    # 121 tests
 ruff check app tests
 ```
 
@@ -466,9 +521,15 @@ Stop the API and frontend with `Ctrl+C` in their terminals.
 
 ## Limitations (MVP)
 
-* LinkedIn and Indeed cannot be imported automatically — see
-  [docs/job-sources.md](docs/job-sources.md). Manual import is the supported
-  workaround.
+* LinkedIn and Indeed only work through `python-jobspy`, which scrapes the
+  public guest pages. That is opt-in, may breach the platforms' terms, and can
+  break whenever a board changes its markup or decides to block you — see
+  [docs/job-sources.md](docs/job-sources.md). Manual import always works.
+* LinkedIn reports only the posting **date**; those jobs carry
+  `published_at_is_date_only = true` and the UI says “date only”.
+* No live scraping is exercised by the test suite (it is mocked) and it was not
+  validated against LinkedIn from the build sandbox, whose egress is restricted.
+  Run one refresh locally to confirm the live path.
 * Single user, no authentication or user table.
 * Publication timestamps are only as good as the source; manual imports leave
   them empty unless you provide a date.
@@ -480,8 +541,9 @@ Stop the API and frontend with `Ctrl+C` in their terminals.
 
 ## Sensible next steps
 
-1. **Authorized provider**: integrate a licensed job feed or an official ATS/job
-   board API behind the existing `SourceAdapter` interface.
+1. **Authorized provider**: integrate a licensed job feed (Adzuna, JSearch,
+   Greenhouse/Lever company boards) behind the existing `SourceAdapter` so
+   retrieval does not depend on scraping.
 2. **Saved searches**: persist named filter sets with per-search refresh and
    “new since last visit” counts.
 3. **Email/alert ingestion**: parse job-alert emails into `POST /api/jobs/import`

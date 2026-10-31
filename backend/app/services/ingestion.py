@@ -105,6 +105,7 @@ def sanitize_job(item: NormalizedJob, *, now: datetime | None = None) -> Normali
         experience_level=item.experience_level,
         description=clean_text(item.description, max_length=MAX_DESCRIPTION_LENGTH),
         published_at=published_at,
+        published_at_is_date_only=bool(published_at and item.published_at_is_date_only),
     )
 
 
@@ -157,8 +158,14 @@ def _apply_update(job: Job, item: NormalizedJob) -> bool:
     if not job.source_job_id and item.source_job_id:
         assign("source_job_id", item.source_job_id)
     # Never overwrite a known publication timestamp, and never invent one.
+    # The one exception: upgrade a date-only timestamp when a later refresh
+    # reports the exact moment.
     if job.published_at is None and item.published_at is not None:
         assign("published_at", item.published_at)
+        assign("published_at_is_date_only", item.published_at_is_date_only)
+    elif job.published_at_is_date_only and not item.published_at_is_date_only and item.published_at:
+        assign("published_at", item.published_at)
+        assign("published_at_is_date_only", False)
     return changed
 
 
@@ -201,6 +208,7 @@ def upsert_job(
         description=clean.description,
         job_url=clean.job_url,
         published_at=clean.published_at,
+        published_at_is_date_only=clean.published_at_is_date_only,
         first_seen_at=now,
         last_seen_at=now,
         is_test_data=is_test_data,

@@ -19,6 +19,7 @@ class SourceRead(BaseModel):
     is_test_data: bool
     docs_url: str | None = None
     required_config: list[str]
+    setup_command: str | None = None
     stored_jobs_count: int = 0
     last_run: FetchRunRead | None = None
 

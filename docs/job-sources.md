@@ -1,12 +1,18 @@
 # Job sources: access assessment and adapter contract
 
-JobRadar is deliberately conservative about automated job retrieval. A provider
-is only marked **available** when listings can be fetched through a method the
-platform explicitly permits. Providers that cannot be accessed that way are
-listed as **unavailable** and are never scraped.
+JobRadar separates two questions: *can* a board be retrieved, and *should* it be?
+A provider is only marked **available** when it can actually return listings;
+everything is labelled with how it was obtained.
 
-> Assessment performed on 2026-10-29. Platform terms and APIs change; re-check
-> before enabling any live integration.
+| Source key | Retrieval | Status by default |
+|---|---|---|
+| `linkedin` | `python-jobspy` guest search (scraping) | **available** when the optional extra is installed, otherwise *unavailable* with install instructions |
+| `indeed` | `python-jobspy` guest search (scraping) | **not configured** — add `indeed` to `JOBSPY_SITES` to opt in |
+| `manual_import` | user pastes a link | available, no retrieval |
+| `fixtures` | bundled synthetic JSON | available, always flagged as test data |
+
+> Assessment performed on 2026-10-29, scraping integration added 2026-10-31.
+> Platform terms and endpoints change; re-check before relying on a connector.
 
 ## LinkedIn
 
@@ -18,11 +24,30 @@ listed as **unavailable** and are never scraped.
   - Sources: [LinkedIn API access overview](https://elfsight.com/blog/linkedin-api-access-and-pricing/),
     [LinkedIn API overview & partner gates](https://bereach.ai/deliverability/linkedin-jobs-api-official-or-unofficial).
 * **Scraping:** LinkedIn's User Agreement prohibits automated collection of
-  member/job data, and its guest job-search endpoints are unofficial and
-  aggressively rate-limited.
-* **JobRadar decision:** `app/sources/linkedin.py` is an *unavailable* adapter.
-  Refreshes record a skipped run with a human-readable reason. Roles you find
-  manually can be recorded with `POST /api/jobs/import` and `source=linkedin`.
+  member/job data, and its guest job-search endpoints (`/jobs-guest/jobs/api/`)
+  are unofficial and aggressively rate-limited. They are the *only* automated
+  path that exists.
+* **JobRadar decision:** `app/sources/linkedin.py` implements that path through
+  [`python-jobspy`](https://pypi.org/project/python-jobspy/), which reads the
+  public guest search page. It is **opt-in** and clearly labelled:
+
+  - `pip install -r backend/requirements-scraping.txt` adds the extra.
+  - `JOBSPY_SITES` must list `linkedin`; `JOBSPY_ENABLED=false` is a hard
+    kill switch. With the package missing, the adapter reports *unavailable* and
+    shows the install command instead of pretending to work.
+  - One request per saved search term (max `JOBSPY_MAX_SEARCH_TERMS`, default 2)
+    with `JOBSPY_REQUEST_DELAY_SECONDS` (default 2s) between calls, and at most
+    `JOBSPY_RESULTS_WANTED` (default 25) listings per term.
+  - Every request is recorded in refresh history. A throttle, block, CAPTCHA or
+    empty page is stored as `failed`/`partial` **with the provider message** —
+    never as a silent success, and never padded with invented listings.
+  - LinkedIn exposes only the posting **date**; `published_at` is stored at
+    midnight UTC with `published_at_is_date_only = true`, and freshness filters
+    treat the whole day as inside the window.
+
+  Enabling it is the operator's decision: automated access may breach LinkedIn's
+  User Agreement and the account/IP behind it can be blocked. JobRadar does not
+  rotate identities to evade a block.
 
 ## Indeed
 
@@ -34,8 +59,10 @@ listed as **unavailable** and are never scraped.
     [Indeed partner program & retired Publisher API](https://apis.io/plans/indeed/indeed-plans-pricing/).
 * **Scraping:** Indeed's Terms of Service prohibit automated extraction; its
   pages use bot detection and CAPTCHAs.
-* **JobRadar decision:** `app/sources/indeed.py` is an *unavailable* adapter.
-  Manual import with `source=indeed` keeps those links in the tracker.
+* **JobRadar decision:** `app/sources/indeed.py` shares the jobspy adapter but is
+  **not configured by default** — add `indeed` to `JOBSPY_SITES` to opt in. The
+  same guard-rails as LinkedIn apply (opt-in, delayed, capped, failures
+  reported). `JOBSPY_COUNTRY` only matters for Indeed.
 
 ## Sample data provider (available, flagged as test data)
 
@@ -100,6 +127,12 @@ changes: it only understands `NormalizedJob` and the shared tables.
   3. Same normalized URL within a source is treated as the same listing.
 * The same role on two platforms produces two rows with their own URLs; the UI
   flags possible duplicates by normalized company + title and never merges them.
+* A provider-reported error with zero usable rows makes the run `failed`; with
+  some rows it becomes `partial`. Provider warnings (skipped rows, empty result)
+  are attached to the refresh response.
+* A refresh with no explicit filters reuses the saved Search Settings (titles,
+  keywords, location, posting age), so "Refresh sources" searches for *your*
+  roles instead of an unfiltered board.
 * Refreshes update mutable fields (title, company, location, description,
   arrangement, experience level, URL) and `last_seen_at`. `published_at` is
   filled only once — a later feed cannot silently change posting age.

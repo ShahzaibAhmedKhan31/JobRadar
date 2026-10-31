@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, case, func, or_, select
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.constants import (
@@ -127,13 +127,31 @@ def _base_conditions(filters: JobFilters) -> list[object]:
     return conditions
 
 
+def published_since(cutoff: datetime) -> object:
+    """Freshness predicate that respects date-only publication timestamps.
+
+    For rows where the provider reported only a calendar date, ``published_at``
+    is midnight UTC of that day. The true posting moment is somewhere inside
+    ``[published_at, published_at + 24h)``, so the row belongs to the window
+    whenever that day overlaps it — expressed without interval arithmetic so it
+    works on both PostgreSQL and SQLite.
+    """
+    return or_(
+        Job.published_at >= cutoff,
+        and_(
+            Job.published_at_is_date_only.is_(True),
+            Job.published_at > cutoff - timedelta(days=1),
+        ),
+    )
+
+
 def _published_window_condition(
     filters: JobFilters, *, now: datetime
 ) -> object | None:
     if not filters.max_age_hours:
         return None
     cutoff = now - timedelta(hours=filters.max_age_hours)
-    window: object = Job.published_at >= cutoff
+    window: object = published_since(cutoff)
     if filters.include_unknown_published:
         window = or_(window, Job.published_at.is_(None))
     return window
