@@ -16,6 +16,7 @@ import {
   getApplications,
   getDashboardActivity,
   getDashboardSummary,
+  getJobFacets,
   getJobs,
   getRefreshHistory,
   getSearchSettings,
@@ -40,6 +41,8 @@ import type {
 
 export const queryKeys = {
   jobs: (filters: JobFilters) => ["jobs", filters] as const,
+  jobFacets: (params: { sources: string[]; include_test_data: boolean }) =>
+    ["jobs", "facets", params] as const,
   job: (id: string) => ["job", id] as const,
   shortlist: (filters: ShortlistFilters) => ["shortlist", filters] as const,
   applications: (filters: ApplicationFilters) => ["applications", filters] as const,
@@ -68,6 +71,18 @@ export function useJobs(filters: JobFilters) {
   return useQuery({
     queryKey: queryKeys.jobs(filters),
     queryFn: () => getJobs(filters),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * What is stored, ignoring the current filters. Used to explain an empty list:
+ * "you have 25 LinkedIn jobs, none in Karachi" is actionable, a blank page is not.
+ */
+export function useJobFacets(params: { sources: string[]; include_test_data: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.jobFacets(params),
+    queryFn: () => getJobFacets(params),
     placeholderData: keepPreviousData,
   });
 }

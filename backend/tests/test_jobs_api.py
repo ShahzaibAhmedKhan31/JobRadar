@@ -186,13 +186,18 @@ def test_sorting_newest_and_relevant(client, db):
 
 def test_pagination(client, db):
     _seed_jobs(db)
-    response = client.get("/api/jobs", params={"page": 2, "page_size": 2}).json()
+    # Sample rows are opt-in now, so request them explicitly to count all five.
+    response = client.get(
+        "/api/jobs", params={"page": 2, "page_size": 2, "include_test_data": True}
+    ).json()
     assert response["total"] == 5
     assert response["pages"] == 3
     assert len(response["items"]) == 2
     assert response["page"] == 2
 
-    beyond = client.get("/api/jobs", params={"page": 9, "page_size": 2}).json()
+    beyond = client.get(
+        "/api/jobs", params={"page": 9, "page_size": 2, "include_test_data": True}
+    ).json()
     assert beyond["items"] == []
     assert beyond["total"] == 5
 
@@ -215,8 +220,12 @@ def test_shortlisted_and_application_status_filters(client, db):
 
 def test_test_data_is_filterable(client, db):
     _seed_jobs(db)
+    # Real rows by default; synthetic rows only when asked for.
     default = client.get("/api/jobs").json()
-    assert default["total"] == 5
+    assert default["total"] == 4
+    assert all(not item["is_test_data"] for item in default["items"])
+    with_samples = client.get("/api/jobs", params={"include_test_data": True}).json()
+    assert with_samples["total"] == 5
     clean = client.get("/api/jobs", params={"include_test_data": False}).json()
     assert clean["total"] == 4
     assert all(not item["is_test_data"] for item in clean["items"])
@@ -252,7 +261,11 @@ def test_refresh_imports_fixtures_then_is_idempotent(client):
     assert payload["runs"][0]["status"] == "success"
     assert payload["runs"][0]["new_jobs_count"] == expected
 
-    jobs = client.get("/api/jobs", params={"page_size": 100}).json()
+    # Synthetic rows only appear when explicitly included.
+    assert client.get("/api/jobs", params={"page_size": 100}).json()["total"] == 0
+    jobs = client.get(
+        "/api/jobs", params={"page_size": 100, "include_test_data": True}
+    ).json()
     assert jobs["total"] == expected
     assert all(item["is_test_data"] for item in jobs["items"])
 

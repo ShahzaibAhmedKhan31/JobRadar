@@ -40,7 +40,7 @@ export const DEFAULT_FILTERS: DiscoverFilterState = {
   experienceLevel: "any",
   sources: [],
   includeUnknownPublished: false,
-  includeTestData: true,
+  includeTestData: false,
 };
 
 interface JobFiltersPanelProps {
@@ -230,7 +230,8 @@ export function JobFiltersPanel({ value, sources, onApply, onReset }: JobFilters
             <div>
               <p className="text-xs font-medium text-foreground">Include sample data</p>
               <p className="text-[11px] text-muted-foreground">
-                Synthetic listings from the bundled demo feed.
+                Off by default. Turn on to see the 26 synthetic demo rows; they never
+                appear in your real metrics.
               </p>
             </div>
             <Switch

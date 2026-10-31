@@ -468,7 +468,7 @@ export default function SettingsPage() {
                         ) : (
                           <RefreshCw className="h-3.5 w-3.5" />
                         )}
-                        Refresh
+                        {source.is_test_data ? "Load samples" : "Refresh"}
                       </Button>
                     ) : null}
                   </div>

@@ -61,7 +61,7 @@ JobRadar/
 │   │   ├── services/           # jobs, ingestion, refresh, shortlist, applications, dashboard, scheduler
 │   │   └── sources/            # base contract, registry, jobspy_source, linkedin, indeed, manual_import, fixtures
 │   ├── alembic/                # migrations (head: 868a9d33f328)
-│   ├── tests/                  # 140 pytest tests (PostgreSQL by default, SQLite fallback)
+│   ├── tests/                  # 149 pytest tests (PostgreSQL by default, SQLite fallback)
 │   ├── requirements.txt        # core runtime deps
 │   ├── requirements-dev.txt    # + pytest, httpx, ruff
 │   └── requirements-scraping.txt  # OPTIONAL: python-jobspy (LinkedIn/Indeed)
@@ -106,7 +106,7 @@ Tests (needs PostgreSQL up; creates/drops tables in `jobradar_test` only):
 ```powershell
 docker exec -it jobradar-postgres createdb -U jobradar jobradar_test   # once
 cd backend
-pytest -q                                # 140 passed
+pytest -q                                # 149 passed
 ruff check app tests
 ```
 
@@ -237,7 +237,7 @@ Last verified 2026-10-31 on this branch:
 
 | Check | Result |
 | --- | --- |
-| `pytest -q` (backend) | **140 passed** |
+| `pytest -q` (backend) | **149 passed** |
 | `ruff check app tests` | clean |
 | `alembic check` | “No new upgrade operations detected” (head `868a9d33f328`) |
 | `npx tsc --noEmit` | clean |
@@ -299,6 +299,55 @@ checked through HTTP + API calls).
 ## 10. Session log
 
 Newest first. Each entry: date · what changed · files · verification.
+
+### 2026-10-31 (late) — sample data opt-in + filters that explain themselves
+
+**Symptom reported:** the app showed sample rows mixed with real jobs, and
+"filters are not working" although a refresh log proved the scrape worked
+(`Refresh linkedin finished: 0 new, 0 updated, 25 unchanged`).
+
+**Diagnosis** — the filters were correct; the data did not match them.
+* The 25 stored rows came from the earlier unfiltered scrape (no terms, no
+  location), so `location=Karachi` legitimately excluded them.
+* A genuine matching bug did exist: `icontains("Karachi, Pakistan")` cannot match
+  `"Karachi, Sindh, Pakistan"`, so typing a city *with a country* silently
+  returned nothing.
+* Sample rows were visible by default in Discover (`includeTestData: true`,
+  API default `True`), while the dashboard hid them — inconsistent and noisy.
+
+**Changed — backend**
+* `location_conditions()` in `services/jobs.py`: every token of the typed
+  location must appear (AND), so "Karachi, Pakistan" matches "Karachi, Sindh,
+  Pakistan" and "Karachi Division, Sindh, Pakistan"; "remote" still maps to the
+  remote arrangement.
+* `GET /api/jobs` now defaults `include_test_data=false`.
+* `GET /api/jobs/facets` (+ `services/jobs.job_facets`): total/real/sample counts
+  and top sources/locations/companies, so an empty result can be explained.
+* `SourceRegistry.refresh_targets` no longer returns test-data adapters for an
+  unfiltered refresh: "refresh everything" cannot load the sample feed. The
+  explicit `{"sources": ["fixtures"]}` path still works.
+* 9 new tests in `tests/test_discovery_filters.py` (location token matching,
+  with-country matching, remote, sample isolation, facets scoping, refresh-all
+  skipping samples); four existing tests updated to the opt-in contract (149).
+
+**Changed — frontend**
+* `DEFAULT_FILTERS.includeTestData` is now `false`; the switch explains that the
+  26 demo rows are hidden unless enabled.
+* Discover calls `useJobFacets` and its empty state now says either "You have N
+  real listings stored, but none match … stored locations: …" or "Nothing has
+  been scraped yet", with the live search button and the location tip.
+* The refresh dropdown lists real sources only and offers **Load sample data**
+  as a separate, explicit entry; Settings labels the fixture button
+  "Load samples".
+* `useJobFacets`, `JobFacets`/`FacetValue` types, `getJobFacets` client.
+
+**Verification** — live API with rows shaped like a real Karachi scrape:
+`location=Karachi` → 2, `location=Karachi, Pakistan` → 2 (would have been 0
+before), `titles=Software Engineer&location=Karachi` → 1, `titles=Software
+Engineer` alone → 2 (incl. Dubai). Default list returned only the 4 real rows
+while `include_test_data=true` returned 30 (4 real + 26 samples); facets reported
+`real_total=4, sample_total=26`; `POST /api/jobs/refresh {}` attempted only
+`linkedin` and never the sample feed. Probe rows were deleted afterwards.
 
 ### 2026-10-31 (night) — "the scraper finds nothing" (two-phase discovery)
 

@@ -266,6 +266,10 @@ page sends exactly what is on screen. Press **Refresh sources**. What to expect:
 * Want Indeed too? Add it: `JOBSPY_SITES=linkedin,indeed`.
 * Want scraping gone entirely? Set `JOBSPY_ENABLED=false` (or do not install the
   extra). Manual import keeps working.
+* **Sample data is opt-in everywhere.** It is excluded from the job list, the
+  facets and dashboard metrics unless `include_test_data=true` (the Discover
+  “Include sample data” switch). “Refresh all sources” never loads it — use
+  *Load sample data* in the refresh dropdown or Settings.
 * **Discovery does not scrape.** `GET /api/jobs` only searches rows already
   stored in PostgreSQL; scraping happens on `POST /api/jobs/refresh`. The
   response echoes `applied_query` (terms, location, window, limit) and, when
@@ -436,8 +440,9 @@ Interactive documentation: <http://localhost:8000/docs> (OpenAPI JSON at
 | --- | --- | --- |
 | `GET` | `/health` | Liveness + database check |
 | `GET` | `/api/jobs` | Filter/sort/paginate stored jobs (`q`, `titles`, `keywords`, `location`, `max_age_hours`, `include_unknown_published`, `work_arrangement`, `experience_level`, `sources`, `shortlisted`, `application_status`, `include_test_data`, `sort`, `page`, `page_size`) |
+| `GET` | `/api/jobs/facets` | Stored counts per source/location/company (real vs sample) — used by the Discover empty state |
 | `GET` | `/api/jobs/{job_id}` | Job detail incl. description and possible duplicates |
-| `POST` | `/api/jobs/refresh` | Refresh one/all sources; returns per-source runs, counts and messages |
+| `POST` | `/api/jobs/refresh` | Refresh one/all real sources (never the sample feed unless `sources: ["fixtures"]`); returns runs, counts, `applied_query` and a message |
 | `GET` | `/api/jobs/refresh-history` | Paginated refresh runs |
 | `POST` | `/api/jobs/import` | Record a manual listing (returns `201` when created, `200` when it already existed) |
 | `GET` | `/api/shortlist` | Shortlisted jobs (filters: sources, priority, date range, search, sort) |
@@ -597,6 +602,8 @@ curl.exe http://127.0.0.1:8000/health
 | `[Errno 10048]` / “address already in use” | Port 8000 is taken: `netstat -ano | findstr :8000`, stop that process, or move the API and set `API_PROXY_TARGET`. |
 | `'uvicorn' is not recognized` | The backend virtualenv is not active (prompt should show `(.venv)`). |
 | Backend exits during “Waiting for database” | PostgreSQL is down or the URL is wrong — `docker compose ps`, then `scripts/preflight.py`. |
+| Nothing appears in Discover although a refresh reported jobs | The list shows stored rows that match your filters. Open the empty state: it lists your stored locations, e.g. “you have 25 real listings, none in Karachi”. A LinkedIn “Karachi” search also returns Gulf jobs, which the location filter correctly hides. |
+| Sample rows mixed with real jobs | They are off by default now; turn on **Include sample data** in the Discover filters, or remove them by loading them once and clearing `is_test_data` rows (see `session.md`). |
 | `column ... does not exist` / `UndefinedColumn` | The database is older than the code: `cd backend; alembic upgrade head`, then restart uvicorn. The API now refuses to start in this state instead of 500-ing per request. |
 | `RuntimeError: Database schema does not match the code` on startup | Same fix — pending migration. `SCHEMA_AUTO_UPGRADE=true` opts into automatic migration instead. |
 | HTTP 503 `schema_out_of_date` | Same cause, seen from the frontend when the startup check is disabled: run `alembic upgrade head`. |

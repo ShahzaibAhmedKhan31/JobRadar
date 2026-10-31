@@ -5,6 +5,7 @@ import type {
   DashboardSummary,
   FetchRun,
   Job,
+  JobFacets,
   JobFilters,
   JobPage,
   ManualJobImportInput,
@@ -133,6 +134,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getJobs(filters: JobFilters): Promise<JobPage> {
   return request<JobPage>(`/api/jobs${toQueryString(filters)}`);
+}
+
+export function getJobFacets(params: {
+  sources?: string[];
+  include_test_data?: boolean;
+}): Promise<JobFacets> {
+  return request<JobFacets>(`/api/jobs/facets${toQueryString(params)}`);
 }
 
 export function getJob(jobId: string): Promise<Job> {

@@ -70,6 +70,28 @@ class JobRead(BaseModel):
     possible_duplicate_count: int = 0
 
 
+class FacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class JobFacets(BaseModel):
+    """What is actually stored, independent of the current filters.
+
+    Empty search results are usually a filter/data mismatch, not a bug, so the
+    UI can show the stored locations and companies next to "no jobs match".
+    """
+
+    total: int
+    include_test_data: bool
+    real_total: int
+    sample_total: int
+    sources: list[FacetValue] = []
+    locations: list[FacetValue] = []
+    companies: list[FacetValue] = []
+    newest_first_seen_at: datetime | None = None
+
+
 class JobPage(Page[JobRead]):
     unknown_published_count: int = 0
     include_test_data: bool = True

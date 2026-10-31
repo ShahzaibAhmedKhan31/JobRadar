@@ -57,7 +57,12 @@ export function RefreshControl({
 }) {
   const { data } = useSources();
   const refreshMutation = useRefreshJobs();
-  const refreshable = (data?.sources ?? []).filter((source) => source.can_refresh);
+  const refreshable = (data?.sources ?? []).filter(
+    (source) => source.can_refresh && !source.is_test_data,
+  );
+  const sampleSources = (data?.sources ?? []).filter(
+    (source) => source.can_refresh && source.is_test_data,
+  );
   const pending = refreshMutation.isPending;
   const payload = buildRefreshPayload(search);
 
@@ -104,7 +109,16 @@ export function RefreshControl({
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={refreshAll}>Refresh all sources</DropdownMenuItem>
+          <DropdownMenuItem onClick={refreshAll}>Refresh all real sources</DropdownMenuItem>
+          {sampleSources.map((source) => (
+            <DropdownMenuItem
+              key={source.key}
+              onClick={() => refreshMutation.mutate({ ...payload, sources: [source.key] })}
+            >
+              <span className="flex-1">Load sample data</span>
+              <span className="text-xs text-muted-foreground">{source.stored_jobs_count}</span>
+            </DropdownMenuItem>
+          ))}
           <p className="px-2 pb-1 pt-2 text-[11px] leading-snug text-muted-foreground">
             {payload.titles?.length || payload.keywords?.length ? (
               <>

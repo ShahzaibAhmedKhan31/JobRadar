@@ -96,13 +96,7 @@ def _base_conditions(filters: JobFilters) -> list[object]:
         )
 
     if filters.location and filters.location.strip():
-        location = filters.location.strip()
-        location_condition: object = Job.location.icontains(location, autoescape=True)
-        if location.lower() in REMOTE_TERMS:
-            location_condition = or_(
-                location_condition, Job.work_arrangement == WorkArrangement.REMOTE
-            )
-        conditions.append(location_condition)
+        conditions.append(location_conditions(filters.location))
 
     if filters.work_arrangement is not None:
         conditions.append(Job.work_arrangement == filters.work_arrangement)
@@ -127,6 +121,62 @@ def _base_conditions(filters: JobFilters) -> list[object]:
     return conditions
 
 
+def _count(db: Session, statement: object) -> int:
+    return int(db.execute(statement).scalar_one())  # type: ignore[arg-type]
+
+
+def job_facets(
+    db: Session,
+    *,
+    sources: list[str] | None = None,
+    include_test_data: bool = False,
+    limit: int = 12,
+) -> dict[str, object]:
+    """Counts of stored jobs by source/location/company for the empty state."""
+    scope: list[object] = []
+    if sources:
+        scope.append(Job.source.in_(sources))
+
+    def _scoped(*extra: object) -> list[object]:
+        return [*scope, *extra]
+
+    total = _count(db, select(func.count()).select_from(Job).where(*_scoped()))
+    real_total = _count(
+        db,
+        select(func.count()).select_from(Job).where(*_scoped(Job.is_test_data.is_(False))),
+    )
+    sample_total = _count(
+        db,
+        select(func.count()).select_from(Job).where(*_scoped(Job.is_test_data.is_(True))),
+    )
+    data_scope = [] if include_test_data else [Job.is_test_data.is_(False)]
+
+    def _group(column: object) -> list[tuple[str, int]]:
+        rows = db.execute(
+            select(column, func.count())  # type: ignore[arg-type]
+            .select_from(Job)
+            .where(*_scoped(*data_scope), column.is_not(None))  # type: ignore[attr-defined]
+            .group_by(column)  # type: ignore[arg-type]
+            .order_by(func.count().desc())
+            .limit(limit)
+        ).all()
+        return [(str(value), int(count)) for value, count in rows if value]
+
+    newest = db.execute(
+        select(func.max(Job.first_seen_at)).where(*_scoped(*data_scope))
+    ).scalar_one_or_none()
+    return {
+        "total": total,
+        "include_test_data": include_test_data,
+        "real_total": real_total,
+        "sample_total": sample_total,
+        "sources": _group(Job.source),
+        "locations": _group(Job.location),
+        "companies": _group(Job.company_name),
+        "newest_first_seen_at": ensure_utc(newest),
+    }
+
+
 def published_since(cutoff: datetime) -> object:
     """Freshness predicate that respects date-only publication timestamps.
 
@@ -143,6 +193,29 @@ def published_since(cutoff: datetime) -> object:
             Job.published_at > cutoff - timedelta(days=1),
         ),
     )
+
+
+def location_conditions(location: str) -> object:
+    """Match a typed location against free-text provider locations.
+
+    Providers do not normalize locations, so an exact substring test fails on
+    perfectly reasonable input: "Karachi, Pakistan" is not a substring of
+    "Karachi, Sindh, Pakistan", and "Karachi" is not a substring of
+    "Karachi Division". Every meaningful token therefore has to be present
+    (AND), which keeps "Karachi, Pakistan" matching both forms while still
+    rejecting "United Arab Emirates".
+    """
+    cleaned = location.strip()
+    tokens = [token for token in split_terms([cleaned], max_terms=6) if len(token) > 1]
+    if not tokens:
+        tokens = [cleaned]
+    conditions: list[object] = [
+        Job.location.icontains(token, autoescape=True) for token in tokens
+    ]
+    combined: object = and_(*conditions) if len(conditions) > 1 else conditions[0]
+    if cleaned.lower() in REMOTE_TERMS:
+        combined = or_(combined, Job.work_arrangement == WorkArrangement.REMOTE)
+    return combined
 
 
 def _published_window_condition(

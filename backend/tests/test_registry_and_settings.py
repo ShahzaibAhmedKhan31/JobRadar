@@ -18,9 +18,13 @@ def test_registry_enabled_sources_allow_list():
     assert [adapter.key for adapter in registry.enabled(settings.enabled_sources)] == [
         "fixtures"
     ]
-    assert [adapter.key for adapter in registry.refresh_targets(None, settings.enabled_sources)] == [
-        "fixtures"
-    ]
+    # "Refresh everything" never loads the sample feed; it must be requested.
+    assert [
+        adapter.key for adapter in registry.refresh_targets(None, settings.enabled_sources)
+    ] == []
+    assert [
+        adapter.key for adapter in registry.refresh_targets(["fixtures"], ["fixtures"])
+    ] == ["fixtures"]
 
 
 def test_registry_rejects_unknown_enabled_source():

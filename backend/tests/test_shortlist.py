@@ -115,7 +115,9 @@ def test_shortlist_filters(client, db):
 def test_shortlist_notes_survive_source_refresh(client, db):
     refresh = client.post("/api/jobs/refresh", json={"sources": ["fixtures"]})
     assert refresh.status_code == 200
-    jobs = client.get("/api/jobs", params={"page_size": 100}).json()["items"]
+    jobs = client.get(
+        "/api/jobs", params={"page_size": 100, "include_test_data": True}
+    ).json()["items"]
     job = jobs[0]
 
     client.post(

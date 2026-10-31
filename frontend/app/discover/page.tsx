@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { JOB_SORT_OPTIONS } from "@/lib/constants";
-import { useJobs, useSearchSettings, useSources } from "@/lib/hooks";
+import { useJobFacets, useJobs, useSearchSettings, useSources } from "@/lib/hooks";
 import { splitTerms } from "@/lib/utils";
 import type { JobFilters, JobSort } from "@/types";
 
@@ -87,6 +87,13 @@ export default function DiscoverPage() {
   );
 
   const { data, isLoading, isFetching, isError, error, refetch } = useJobs(apiFilters);
+
+  // What is actually stored, ignoring the filters — so an empty page can say why.
+  const facetsQuery = useJobFacets({
+    sources: filters.sources.length > 0 ? filters.sources : [],
+    include_test_data: filters.includeTestData,
+  });
+  const facets = facetsQuery.data;
 
   const applyFilters = (next: DiscoverFilterState) => {
     setFilters(next);
@@ -241,19 +248,45 @@ export default function DiscoverPage() {
             hasActiveFilters ? (
               <EmptyState
                 icon={<Search className="h-5 w-5" />}
-                title="Nothing stored matches these filters"
+                title={
+                  (facets?.real_total ?? 0) > 0
+                    ? "Nothing stored matches these filters"
+                    : "No real listings stored yet"
+                }
                 description={
-                  <>
-                    This page searches listings <strong>already stored</strong> in JobRadar — it
-                    does not contact LinkedIn on its own. Run the search below to scrape these
-                    exact criteria, then the results appear here.
-                    {filters.location ? null : (
-                      <span className="mt-2 block text-amber-700">
-                        Tip: add a location such as “Karachi, Pakistan” — an unscoped LinkedIn
-                        search returns very little.
+                  (facets?.real_total ?? 0) > 0 ? (
+                    <>
+                      You have <strong>{facets?.real_total}</strong> real listing
+                      {facets?.real_total === 1 ? "" : "s"} stored, but none match the current
+                      filters. This page only searches what is already in JobRadar — it does not
+                      contact LinkedIn by itself.
+                      {(facets?.locations?.length ?? 0) > 0 ? (
+                        <span className="mt-2 block">
+                          Stored locations:{" "}
+                          <span className="text-foreground">
+                            {facets?.locations
+                              .slice(0, 4)
+                              .map((item) => `${item.value} (${item.count})`)
+                              .join(", ")}
+                          </span>
+                        </span>
+                      ) : null}
+                      <span className="mt-1 block">
+                        Adjust a filter, or run this search to fetch more:
                       </span>
-                    )}
-                  </>
+                    </>
+                  ) : (
+                    <>
+                      Nothing has been scraped yet. Press the button below to search LinkedIn with
+                      these exact criteria — the results are stored, then listed here.
+                      {filters.location ? null : (
+                        <span className="mt-2 block text-amber-700">
+                          Tip: add a location such as “Karachi, Pakistan”. An unscoped LinkedIn
+                          search returns very little.
+                        </span>
+                      )}
+                    </>
+                  )
                 }
                 action={
                   <div className="flex flex-wrap justify-center gap-2">

@@ -81,6 +81,22 @@ export interface Job {
   possible_duplicates?: DuplicateRef[];
 }
 
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+export interface JobFacets {
+  total: number;
+  include_test_data: boolean;
+  real_total: number;
+  sample_total: number;
+  sources: FacetValue[];
+  locations: FacetValue[];
+  companies: FacetValue[];
+  newest_first_seen_at: string | null;
+}
+
 export interface JobPage extends Page<Job> {
   unknown_published_count: number;
   include_test_data: boolean;

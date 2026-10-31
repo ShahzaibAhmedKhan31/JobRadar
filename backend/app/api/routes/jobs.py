@@ -19,7 +19,9 @@ from app.core.constants import (
 from app.models.fetch_run import JobFetchRun
 from app.schemas.common import Page
 from app.schemas.job import (
+    FacetValue,
     JobDetail,
+    JobFacets,
     JobPage,
     ManualImportResponse,
     ManualJobImport,
@@ -65,7 +67,9 @@ def list_jobs(
     ] = False,
     shortlisted: Annotated[bool | None, Query()] = None,
     application_status: Annotated[list[ApplicationStatus] | None, Query()] = None,
-    include_test_data: Annotated[bool, Query()] = True,
+    include_test_data: Annotated[
+        bool, Query(description="Include synthetic sample rows (opt-in)")
+    ] = False,
     sort: Annotated[SortOption, Query()] = SortOption.NEWEST,
 ) -> JobPage:
     if sources:
@@ -104,6 +108,37 @@ def list_jobs(
         page_size=pagination.page_size,
         unknown_published_count=result.unknown_published_count,
         include_test_data=include_test_data,
+    )
+
+
+@router.get(
+    "/facets",
+    response_model=JobFacets,
+    summary="What is stored, independent of the current filters",
+)
+def get_job_facets(
+    db: DbSession,
+    sources: Annotated[list[str] | None, Query(description="Source keys")] = None,
+    include_test_data: Annotated[bool, Query()] = False,
+) -> JobFacets:
+    raw = job_service.job_facets(
+        db,
+        sources=sources or [],
+        include_test_data=include_test_data,
+    )
+
+    def _values(key: str) -> list[FacetValue]:
+        return [FacetValue(value=value, count=count) for value, count in raw[key]]  # type: ignore[misc]
+
+    return JobFacets(
+        total=int(raw["total"]),  # type: ignore[arg-type]
+        include_test_data=include_test_data,
+        real_total=int(raw["real_total"]),  # type: ignore[arg-type]
+        sample_total=int(raw["sample_total"]),  # type: ignore[arg-type]
+        sources=_values("sources"),
+        locations=_values("locations"),
+        companies=_values("companies"),
+        newest_first_seen_at=raw["newest_first_seen_at"],  # type: ignore[arg-type]
     )
 
 
