@@ -66,6 +66,8 @@ export interface Job {
   description_snippet: string | null;
   job_url: string;
   published_at: string | null;
+  /** True when the source only reported the posting date (LinkedIn). */
+  published_at_is_date_only: boolean;
   posting_age_hours: number | null;
   first_seen_at: string;
   discovered_age_hours: number;
@@ -140,6 +142,7 @@ export interface SourceInfo {
   is_test_data: boolean;
   docs_url: string | null;
   required_config: string[];
+  setup_command: string | null;
   stored_jobs_count: number;
   last_run: FetchRun | null;
 }

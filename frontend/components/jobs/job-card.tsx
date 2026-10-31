@@ -33,7 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useRemoveShortlist, useShortlistJob } from "@/lib/hooks";
-import { formatHoursAgo, relativeFromNow } from "@/lib/utils";
+import { describePostingAge, relativeFromNow } from "@/lib/utils";
 import type { Job } from "@/types";
 
 interface JobCardProps {
@@ -122,9 +122,7 @@ export function JobCard({ job, compact = false }: JobCardProps) {
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <Timer className="h-3.5 w-3.5" />
-            {job.posting_age_hours !== null
-              ? `Posted ${formatHoursAgo(job.posting_age_hours)}`
-              : "Publication time unknown"}
+            {describePostingAge(job.posting_age_hours, job.published_at_is_date_only)}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <CalendarClock className="h-3.5 w-3.5" />

@@ -80,6 +80,9 @@ export default function SettingsPage() {
   }
 
   const sources = sourcesQuery.data?.sources ?? [];
+  const scrapingSources = sources.filter(
+    (source) => source.can_refresh && !source.is_test_data && source.key !== "manual_import",
+  );
 
   const toggleSource = (key: string) => {
     if (!form) return;
@@ -349,10 +352,31 @@ export default function SettingsPage() {
             <div className="flex gap-3 rounded-lg bg-muted/50 p-3">
               <Lock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <div>
-                <p className="font-medium">LinkedIn &amp; Indeed are manual</p>
+                <p className="font-medium">
+                  {scrapingSources.length > 0
+                    ? `Scraping is on for ${scrapingSources.map((source) => source.name).join(", ")}`
+                    : "LinkedIn & Indeed need an opt-in"}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  Neither platform offers an authorized public job-search API. JobRadar does not
-                  scrape them. Use “Import job link” to record roles you find yourself.
+                  {scrapingSources.length > 0 ? (
+                    <>
+                      Listings come from the board&apos;s public guest search pages through
+                      python-jobspy. Automated access may breach the board&apos;s terms of service
+                      and can be throttled or blocked at any time — JobRadar never bypasses a
+                      block, and a blocked run shows up as <em>failed</em> with the provider
+                      message. Keep refreshes manual: each saved title is one request, with a{" "}
+                      {""}
+                      short delay in between.
+                    </>
+                  ) : (
+                    <>
+                      Neither platform offers a self-serve job-search API, so nothing is fetched
+                      until you install the optional{" "}
+                      <code className="font-mono text-[11px]">python-jobspy</code> extra and opt in
+                      through <code className="font-mono text-[11px]">JOBSPY_SITES</code>. “Import
+                      job link” always works without it.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -413,8 +437,20 @@ export default function SettingsPage() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold">{source.name}</p>
-                        <Badge variant={source.availability === "available" ? "success" : "muted"}>
-                          {source.availability === "available" ? "Available" : "Unavailable"}
+                        <Badge
+                          variant={
+                            source.availability === "available"
+                              ? "success"
+                              : source.availability === "not_configured"
+                                ? "warning"
+                                : "muted"
+                          }
+                        >
+                          {source.availability === "available"
+                            ? "Available"
+                            : source.availability === "not_configured"
+                              ? "Opt-in required"
+                              : "Unavailable"}
                         </Badge>
                         {source.is_test_data ? <Badge variant="warning">Sample data</Badge> : null}
                       </div>
@@ -441,6 +477,16 @@ export default function SettingsPage() {
                       {source.availability_reason}
                     </p>
                   ) : null}
+                  {source.setup_command ? (
+                    <div className="rounded-md border border-dashed border-border bg-background p-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        How to enable
+                      </p>
+                      <code className="mt-1 block break-all font-mono text-[11px] text-foreground">
+                        {source.setup_command}
+                      </code>
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       <Database className="h-3.5 w-3.5" /> {source.stored_jobs_count} jobs stored
@@ -466,6 +512,59 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Scraping guard-rails</CardTitle>
+          <CardDescription>
+            What JobRadar does — and refuses to do — when scraping LinkedIn or Indeed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 text-sm md:grid-cols-2">
+          <div className="rounded-lg border border-border/80 p-3">
+            <p className="flex items-center gap-2 font-medium">
+              <ShieldCheck className="h-4 w-4 text-primary" /> Opt-in only
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Nothing contacts a board unless the optional{" "}
+              <code className="font-mono text-[11px]">python-jobspy</code> package is installed and
+              the site is listed in <code className="font-mono text-[11px]">JOBSPY_SITES</code>.
+              <code className="font-mono text-[11px]"> JOBSPY_ENABLED=false</code> switches it off
+              completely.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/80 p-3">
+            <p className="flex items-center gap-2 font-medium">
+              <Clock3 className="h-4 w-4 text-primary" /> Deliberately slow
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              One request per saved search term with a configurable delay between calls, and a
+              capped result count. Scheduled refresh is off by default; keep it at one hour or
+              longer if you turn it on.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/80 p-3">
+            <p className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="h-4 w-4 text-amber-600" /> Blocks are reported
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              A throttle, block or empty response is recorded in refresh history as{" "}
+              <em>failed</em> or <em>partial</em> with the provider message. JobRadar never
+              fabricates listings to fill the gap and never solves a CAPTCHA.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/80 p-3">
+            <p className="flex items-center gap-2 font-medium">
+              <Info className="h-4 w-4 text-primary" /> Date-only timestamps
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              LinkedIn only exposes the posting date, so those cards say &ldquo;date only&rdquo;
+              and freshness filters treat the whole day as inside the window instead of inventing
+              an hour.
+            </p>
+          </div>
         </CardContent>
       </Card>
 

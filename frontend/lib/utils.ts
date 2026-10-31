@@ -59,6 +59,19 @@ export function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Human posting age. LinkedIn reports only a calendar date, so the value is a
+ * lower bound and is labelled as such instead of pretending to be exact.
+ */
+export function describePostingAge(
+  hours: number | null | undefined,
+  dateOnly = false,
+): string {
+  if (hours === null || hours === undefined) return "Publication time unknown";
+  const relative = formatHoursAgo(hours);
+  return dateOnly ? `Posted around ${relative} (date only)` : `Posted ${relative}`;
+}
+
 export function relativeFromNow(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);

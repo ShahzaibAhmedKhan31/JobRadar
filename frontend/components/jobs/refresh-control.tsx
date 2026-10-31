@@ -62,6 +62,12 @@ export function RefreshControl({ compact = false }: { compact?: boolean }) {
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={refreshAll}>Refresh all sources</DropdownMenuItem>
+          {refreshable.some((source) => source.required_config.includes("python-jobspy")) ? (
+            <p className="px-2 pb-1 pt-2 text-[11px] leading-snug text-muted-foreground">
+              LinkedIn/Indeed scraping uses your saved search terms and is rate-limited: expect a
+              few seconds per refresh, and a failed run if the board throttles us.
+            </p>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
