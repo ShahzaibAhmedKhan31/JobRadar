@@ -6,6 +6,11 @@
 >
 > Last updated: **2026-10-31** · Branch: `arena/199744a1-jobradar` ·
 > Stack: Next.js 15 + FastAPI + PostgreSQL 16.
+>
+> **Current PR:** [#2](https://github.com/ShahzaibAhmedKhan31/JobRadar/pull/2)
+> (`arena/199744a1-jobradar` → `main`). The MVP itself is already merged on
+> `main` via PR #1. Commits on this branch:
+> `1a31385` backend/adapter/docs · `0d9a8e3` frontend · `6feece3` this file.
 
 ---
 
