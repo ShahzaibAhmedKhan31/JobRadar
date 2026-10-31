@@ -61,7 +61,7 @@ JobRadar/
 │   │   ├── services/           # jobs, ingestion, refresh, shortlist, applications, dashboard, scheduler
 │   │   └── sources/            # base contract, registry, jobspy_source, linkedin, indeed, manual_import, fixtures
 │   ├── alembic/                # migrations (head: 868a9d33f328)
-│   ├── tests/                  # 121 pytest tests (PostgreSQL by default, SQLite fallback)
+│   ├── tests/                  # 133 pytest tests (PostgreSQL by default, SQLite fallback)
 │   ├── requirements.txt        # core runtime deps
 │   ├── requirements-dev.txt    # + pytest, httpx, ruff
 │   └── requirements-scraping.txt  # OPTIONAL: python-jobspy (LinkedIn/Indeed)
@@ -106,7 +106,7 @@ Tests (needs PostgreSQL up; creates/drops tables in `jobradar_test` only):
 ```powershell
 docker exec -it jobradar-postgres createdb -U jobradar jobradar_test   # once
 cd backend
-pytest -q                                # 121 passed
+pytest -q                                # 133 passed
 ruff check app tests
 ```
 
@@ -144,6 +144,13 @@ Same, with `python3 -m venv .venv`, `source .venv/bin/activate`, and
 
 Enumerations are `VARCHAR(32)` + `CHECK` constraints, mirrored by `StrEnum`s in
 `backend/app/core/constants.py`.
+
+**Schema drift is caught at startup.** `app/db/schema_check.py` compares the
+revision stored in `alembic_version` with the head revision in `alembic/versions`.
+When they differ the API refuses to start with the exact command to run
+(`SCHEMA_AUTO_UPGRADE=true` opts into migrating automatically). If the check is
+disabled, any `ProgrammingError` for a missing column/table is translated into
+HTTP 503 `schema_out_of_date` with the same instruction instead of a 500 traceback.
 
 ### Timestamp semantics (important)
 
@@ -230,7 +237,7 @@ Last verified 2026-10-31 on this branch:
 
 | Check | Result |
 | --- | --- |
-| `pytest -q` (backend) | **121 passed** |
+| `pytest -q` (backend) | **133 passed** |
 | `ruff check app tests` | clean |
 | `alembic check` | “No new upgrade operations detected” (head `868a9d33f328`) |
 | `npx tsc --noEmit` | clean |
@@ -292,6 +299,46 @@ checked through HTTP + API calls).
 ## 10. Session log
 
 Newest first. Each entry: date · what changed · files · verification.
+
+### 2026-10-31 (evening) — stale-database guard
+
+**Symptom reported:** every request failed with
+`psycopg.errors.UndefinedColumn: column jobs.published_at_is_date_only does not
+exist` after pulling the new code — the author's database still had the schema
+from before migration `868a9d33f328`. The immediate fix was
+`alembic upgrade head`; the code now prevents the confusing version.
+
+**Added**
+* `backend/app/db/schema_check.py` — `schema_status()` / `ensure_schema()`:
+  reads the head revision from `alembic/versions`, compares it with
+  `alembic_version` in the database, and on a mismatch refuses to start with
+  `Database schema does not match the code. database at X, code expects Y. Run
+  \`alembic upgrade head\` from backend/`. A missing `alembic_version` table is a
+  warning only (fresh DBs and the test fixture build tables from metadata).
+* `app/main.py` — calls `ensure_schema()` in the lifespan; a `ProgrammingError`
+  handler maps PostgreSQL SQLSTATE 42703/42P01/42704 to **503
+  `schema_out_of_date`** with the missing object name and the fix, so even with
+  the startup check disabled the failure is legible. SQLSTATE lookup falls back
+  to parsing the driver message, because psycopg only fills `diag.column_name`
+  for some error shapes.
+* `backend/tests/test_schema_guard.py` — 12 tests: head/stale/uninitialized
+  status, refusal message, auto-upgrade path, disabled/SQLite skips, and the
+  503 translation exercised through a real `ProgrammingError` in an endpoint.
+* Config: `SCHEMA_CHECK_ON_STARTUP` (default true), `SCHEMA_AUTO_UPGRADE`
+  (default false); documented in `backend/.env.example` and the README env table.
+
+**Changed**
+* README: "Pulling new code? Run the migrations" callout, three new
+  troubleshooting rows; `FastAPI` description updated (it still claimed
+  LinkedIn/Indeed were disabled).
+* `tests/conftest.py` — `SCHEMA_CHECK_ON_STARTUP=false` for the suite.
+
+**Verification** — recreated the failure with a scratch database at the old
+revision (`alembic upgrade c54269e5d2c5`): the API refuses to start with the
+message above, auto-upgrade migrates it to `868a9d33f328` and starts cleanly, and
+with the check disabled `/api/dashboard/summary` answers 503
+`missing column jobs.published_at_is_date_only … run alembic upgrade head`
+instead of a traceback. 133 tests pass, ruff clean.
 
 ### 2026-10-31 (later) — "connection refused" support work
 

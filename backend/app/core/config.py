@@ -28,6 +28,10 @@ class Settings(BaseSettings):
         "postgresql+psycopg://jobradar:jobradar@localhost:5432/jobradar"
     )
     db_wait_on_startup: bool = True
+    #: Compare the database's alembic revision with the code before serving.
+    schema_check_on_startup: bool = True
+    #: Apply pending migrations automatically instead of refusing to start.
+    schema_auto_upgrade: bool = False
     db_wait_attempts: int = Field(default=30, ge=1, le=600)
     db_wait_interval_seconds: float = Field(default=2.0, ge=0.1, le=30)
 

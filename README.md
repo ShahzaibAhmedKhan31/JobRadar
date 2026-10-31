@@ -337,6 +337,8 @@ npm run dev
 | `ENVIRONMENT` | `development` | Shown in `/health` |
 | `LOG_LEVEL` | `INFO` | Root log level |
 | `DB_WAIT_ON_STARTUP` | `true` | Retry connecting while Postgres boots |
+| `SCHEMA_CHECK_ON_STARTUP` | `true` | Compare the database's Alembic revision with the code and refuse to start when they differ |
+| `SCHEMA_AUTO_UPGRADE` | `false` | Apply pending migrations automatically at startup instead of refusing |
 | `MAX_REFRESH_JOBS_PER_SOURCE` | `500` | Upper bound per manual refresh |
 | `ENABLED_SOURCES` | *(empty = all)* | Optional allow-list, e.g. `fixtures,manual_import` |
 | `SCHEDULER_ENABLED` | `true` | Master switch for the in-process scheduler |
@@ -366,6 +368,23 @@ frontend bundle, and no provider credentials are required for the MVP.
 ---
 
 ## Database and migrations
+
+> **Pulling new code? Run the migrations.** Every commit that changes the schema
+> ships an Alembic revision; the API refuses to start when the database is older
+> than the code, printing exactly what to run:
+>
+> ```
+> RuntimeError: Database schema does not match the code. database schema is behind
+> the code: database at c54269e5d2c5, code expects 868a9d33f328.
+> Run `alembic upgrade head` from backend/.
+> ```
+>
+> ```powershell
+> cd backend; .\.venv\Scripts\Activate.ps1; alembic upgrade head
+> ```
+>
+> If you would rather have the API migrate itself, set `SCHEMA_AUTO_UPGRADE=true`.
+> Either way, migrations are the only supported way to change the schema.
 
 The schema is created by Alembic:
 
@@ -569,6 +588,9 @@ curl.exe http://127.0.0.1:8000/health
 | `[Errno 10048]` / “address already in use” | Port 8000 is taken: `netstat -ano | findstr :8000`, stop that process, or move the API and set `API_PROXY_TARGET`. |
 | `'uvicorn' is not recognized` | The backend virtualenv is not active (prompt should show `(.venv)`). |
 | Backend exits during “Waiting for database” | PostgreSQL is down or the URL is wrong — `docker compose ps`, then `scripts/preflight.py`. |
+| `column ... does not exist` / `UndefinedColumn` | The database is older than the code: `cd backend; alembic upgrade head`, then restart uvicorn. The API now refuses to start in this state instead of 500-ing per request. |
+| `RuntimeError: Database schema does not match the code` on startup | Same fix — pending migration. `SCHEMA_AUTO_UPGRADE=true` opts into automatic migration instead. |
+| HTTP 503 `schema_out_of_date` | Same cause, seen from the frontend when the startup check is disabled: run `alembic upgrade head`. |
 | PowerShell blocks venv activation | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`. |
 | Dashboard shows zeros although sample data exists | Sample rows are excluded by default — use the “Include sample data” toggle. |
 | Tests skip PostgreSQL | Set `TEST_DATABASE_URL` and create the `jobradar_test` database. |
