@@ -25,6 +25,8 @@ from app.schemas.job import (
     JobPage,
     ManualImportResponse,
     ManualJobImport,
+    PruneJobsRequest,
+    PruneJobsResponse,
     job_to_read,
 )
 from app.schemas.refresh import (
@@ -143,6 +145,47 @@ def get_job_facets(
 
 
 @router.post(
+    "/prune",
+    response_model=PruneJobsResponse,
+    summary="Delete stored listings you never shortlisted or applied to",
+)
+def prune_stored_jobs(
+    payload: PruneJobsRequest, db: DbSession, registry: RegistryDep
+) -> PruneJobsResponse:
+    """Clean up listings a provider delivered but the user does not want.
+
+    Tracked listings (shortlisted or with an application) are never deleted:
+    they represent the user's own work and the foreign keys cascade.
+    """
+    if payload.sources:
+        unknown = set(payload.sources) - registry.known_keys()
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown source key(s): {', '.join(sorted(unknown))}",
+            )
+    result = job_service.prune_jobs(
+        db, sources=payload.sources, include_test_data=payload.include_test_data
+    )
+    if result.deleted:
+        message = f"Removed {result.deleted} stored listing(s)."
+    elif result.matched:
+        message = "Nothing removed: every matching listing is shortlisted or has an application."
+    else:
+        message = "Nothing stored matches that scope, so nothing was removed."
+    if result.deleted and result.protected:
+        message += (
+            f" Kept {result.protected} listing(s) you had shortlisted or applied to."
+        )
+    return PruneJobsResponse(
+        deleted=result.deleted,
+        protected=result.protected,
+        matched=result.matched,
+        message=message,
+    )
+
+
+@router.post(
     "/import",
     response_model=ManualImportResponse,
     summary="Record a listing found manually",
@@ -237,6 +280,15 @@ def refresh_jobs(
         # Nothing came back: say exactly what was asked so the user can compare
         # it with a search that works for them.
         message += f" Searched {applied.summary()}."
+    if (
+        applied is not None
+        and outcome.location_source == "default"
+        and applied.location
+    ):
+        message += (
+            f" No location was set, so the default ({applied.location}) was used —"
+            " change it in Search Settings."
+        )
     return RefreshResponse(
         runs=runs,
         new_jobs=outcome.new_jobs,

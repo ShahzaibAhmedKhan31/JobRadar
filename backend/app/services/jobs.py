@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, and_, case, func, or_, select
+from sqlalchemy import Select, and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.constants import (
@@ -51,6 +51,18 @@ class JobListResult:
     total: int
     unknown_published_count: int
     duplicate_counts: dict[uuid.UUID, int] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class PruneResult:
+    """Outcome of removing stored listings."""
+
+    #: Rows deleted.
+    deleted: int = 0
+    #: Rows that matched the scope but were kept because they are tracked.
+    protected: int = 0
+    #: Rows that matched the scope before the tracked-job protection.
+    matched: int = 0
 
 
 def _any_field_conditions(term: str, fields: tuple[object, ...]) -> object:
@@ -175,6 +187,46 @@ def job_facets(
         "companies": _group(Job.company_name),
         "newest_first_seen_at": ensure_utc(newest),
     }
+
+
+def prune_jobs(
+    db: Session,
+    *,
+    sources: list[str] | None = None,
+    include_test_data: bool = False,
+) -> PruneResult:
+    """Delete stored listings that the user never acted on.
+
+    Scrapers can leave perfectly good but irrelevant rows behind (for example a
+    US-wide feed fetched before a location was configured). Removing them is the
+    only way back to a clean list, but a listing that was shortlisted or turned
+    into an application is the user's own work: those rows are always kept,
+    whatever the scope, because deleting a job cascades to its shortlist entry
+    and application.
+    """
+    conditions: list[object] = []
+    if sources:
+        conditions.append(Job.source.in_(sources))
+    if not include_test_data:
+        conditions.append(Job.is_test_data.is_(False))
+
+    tracked: object = or_(
+        Job.id.in_(select(ShortlistedJob.job_id)),
+        Job.id.in_(select(Application.job_id)),
+    )
+    matched = _count(db, select(func.count()).select_from(Job).where(*conditions))
+    protected = _count(
+        db, select(func.count()).select_from(Job).where(*conditions, tracked)
+    )
+    result = db.execute(
+        delete(Job)
+        .where(*conditions, ~tracked)
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
+    return PruneResult(
+        deleted=int(result.rowcount or 0), protected=protected, matched=matched
+    )
 
 
 def published_since(cutoff: datetime) -> object:

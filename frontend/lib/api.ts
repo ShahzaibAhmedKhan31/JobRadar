@@ -10,6 +10,7 @@ import type {
   JobPage,
   ManualJobImportInput,
   Page,
+  PruneJobsResult,
   RefreshResponse,
   SearchSettings,
   ShortlistEntry,
@@ -141,6 +142,16 @@ export function getJobFacets(params: {
   include_test_data?: boolean;
 }): Promise<JobFacets> {
   return request<JobFacets>(`/api/jobs/facets${toQueryString(params)}`);
+}
+
+export function pruneJobs(payload: {
+  sources?: string[];
+  include_test_data?: boolean;
+}): Promise<PruneJobsResult> {
+  return request<PruneJobsResult>("/api/jobs/prune", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getJob(jobId: string): Promise<Job> {

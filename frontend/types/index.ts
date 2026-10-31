@@ -97,6 +97,13 @@ export interface JobFacets {
   newest_first_seen_at: string | null;
 }
 
+export interface PruneJobsResult {
+  deleted: number;
+  protected: number;
+  matched: number;
+  message: string;
+}
+
 export interface JobPage extends Page<Job> {
   unknown_published_count: number;
   include_test_data: boolean;

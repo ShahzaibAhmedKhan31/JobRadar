@@ -129,6 +129,9 @@ class SourceAdapter(ABC):
     availability_reason: str | None = None
     supports_refresh: bool = True
     is_test_data: bool = False
+    #: True when the provider returns an arbitrary feed unless it is given a
+    #: location or keywords, so a refresh must never run completely unscoped.
+    requires_search_scope: bool = False
     docs_url: str | None = None
     #: Environment variables a live integration would need.
     required_config: tuple[str, ...] = ()

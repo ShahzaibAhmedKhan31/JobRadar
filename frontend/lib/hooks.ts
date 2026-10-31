@@ -23,6 +23,7 @@ import {
   getShortlist,
   getSources,
   importJob,
+  pruneJobs,
   refreshJobs,
   removeShortlistEntry,
   updateApplication,
@@ -279,6 +280,23 @@ export function useRefreshJobs() {
         description: details.length > 0 ? details.join(" · ") : undefined,
         duration: data.new_jobs === 0 ? 9000 : 5000,
       });
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+}
+
+export function usePruneJobs() {
+  const invalidate = useInvalidateTrackerData();
+  return useMutation({
+    mutationFn: (payload: { sources?: string[]; include_test_data?: boolean }) =>
+      pruneJobs(payload),
+    onSuccess: (data) => {
+      invalidate();
+      if (data.deleted > 0) {
+        toast.success(data.message);
+      } else {
+        toast.info(data.message);
+      }
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

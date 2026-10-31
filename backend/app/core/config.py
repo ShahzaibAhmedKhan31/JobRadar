@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     jobspy_proxies: Annotated[list[str], NoDecode] = Field(default_factory=list)
     #: Country hint for the Indeed scraper (ignored for LinkedIn).
     jobspy_country: str = "pakistan"
+    #: Fallback search location when neither the refresh request nor the saved
+    #: Search Settings carry one. Without this, LinkedIn answers with a US-wide
+    #: feed, which is how unrelated listings end up in the database.
+    #: Empty means "use the country above" (e.g. ``pakistan`` -> ``Pakistan``).
+    jobspy_default_location: str = ""
     #: Fetch full descriptions. One extra request per listing on LinkedIn, so
     #: this multiplies traffic and raises the throttling risk.
     jobspy_fetch_description: bool = False

@@ -237,7 +237,7 @@ Last verified 2026-10-31 on this branch:
 
 | Check | Result |
 | --- | --- |
-| `pytest -q` (backend) | **149 passed** |
+| `pytest -q` (backend) | **162 passed** |
 | `ruff check app tests` | clean |
 | `alembic check` | “No new upgrade operations detected” (head `868a9d33f328`) |
 | `npx tsc --noEmit` | clean |
@@ -248,6 +248,8 @@ Last verified 2026-10-31 on this branch:
 | `/api/sources` live | `linkedin available` (jobspy installed), `indeed not_configured` + `set JOBSPY_SITES=linkedin, indeed`, `fixtures available` |
 | Live jobspy attempt | Real HTTPS request to `www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=…&start=0`; the sandbox proxy closed the TLS connection → run stored as `failed` with the exact provider message (proves the error path, **not** a successful scrape) |
 | Date-only round trip | Row with `published_at_is_date_only=true` returned by `/api/jobs`, included in a 24h window despite a 38h-old timestamp |
+| Refresh scope live | 5 seeded US LinkedIn rows → `location=Karachi, Pakistan` returns 0 while `/api/jobs/facets` reports `real_total=5` and the US cities; a hint-less refresh reports `applied_query.location="Pakistan"` and says the default was used |
+| Prune live | `POST /api/jobs/prune` → `{deleted: 4, protected: 1, matched: 5}` with one shortlisted row kept; sample rows untouched (26) |
 
 What was **not** verified: a successful live LinkedIn scrape (no egress from the
 build sandbox) and browser-level interaction (no browser in the sandbox — UI was
@@ -299,6 +301,51 @@ checked through HTTP + API calls).
 ## 10. Session log
 
 Newest first. Each entry: date · what changed · files · verification.
+
+### 2026-10-31 (later) — a refresh always searches somewhere; stray listings can be removed
+
+**Symptom reported:** after applying a location filter, Discover said “You have
+**50** real listings stored, but none match the current filters” and listed only
+US cities (Chula Vista, Oceanside, Mission Viejo, Cleveland).
+
+**Diagnosis — the filter was right, the database was wrong.** The rows came from
+a refresh with no hints (the Dashboard button sends none), which resolved to
+`location=None`. LinkedIn's guest search answers a location-less query with a
+US-wide feed, and `JOBSPY_COUNTRY` was only ever used for Indeed. Reproduced with
+a patched scraper: `POST /api/jobs/refresh {}` → `_run_scrape(location=None,
+search_term=None)`; with `{"location": "Karachi, Pakistan"}` the location is
+forwarded verbatim.
+
+**Changed — backend**
+* `JOBSPY_DEFAULT_LOCATION` (new; falls back to `JOBSPY_COUNTRY`).
+* `resolve_search_scope()` in `services/refresh.py` — precedence request → saved
+  Search Settings → configured default, and it reports which one was used
+  (`RefreshOutcome.location_source`).
+* `run_refresh` refuses a completely unscoped scrape of a board that needs one
+  (`SourceAdapter.requires_search_scope`, true for the jobspy adapters) with a
+  400 that says what to set — better than filling the DB with noise.
+* The refresh message names a defaulted location (“No location was set, so the
+  default (Pakistan) was used”).
+* `POST /api/jobs/prune` + `services/jobs.prune_jobs()`: deletes stored listings
+  that were **never** shortlisted or applied to (optional `sources`,
+  `include_test_data`). Tracked rows are protected because deleting a job
+  cascades to its shortlist entry and application.
+
+**Changed — frontend**
+* Discover empty state: when none of the stored locations mention the typed one,
+  it says the rows came from a different search, and offers **Remove these N
+  listings** (confirm dialog; tracked rows are kept).
+* `pruneJobs` / `usePruneJobs` / `PruneJobsDialog`; refresh-dropdown copy now
+  says the search uses the default location when none is typed.
+
+**Verification**
+* `pytest -q` → **162 passed** (13 new: `tests/test_refresh_scope.py`,
+  `tests/test_prune_jobs.py`), `ruff check app tests` clean, `tsc --noEmit`
+  clean, ESLint clean.
+* Live: seeded 5 US LinkedIn rows → `location=Karachi, Pakistan` → 0, facets
+  `real_total=5` with the four US cities the user saw; hint-less refresh →
+  `applied_query.location="Pakistan"` + the default-location sentence; prune →
+  `deleted 4, protected 1` (one shortlisted); cleanup left 0 real / 26 sample.
 
 ### 2026-10-31 (late) — sample data opt-in + filters that explain themselves
 

@@ -126,13 +126,13 @@ export function RefreshControl({
                 <span className="font-medium text-foreground">
                   {[...(payload.titles ?? []), ...(payload.keywords ?? [])].join(", ")}
                 </span>
-                {payload.location ? ` in ${payload.location}` : " (no location)"}
+                {payload.location ? ` in ${payload.location}` : " (default location)"}
                 {payload.max_age_hours ? ` · last ${payload.max_age_hours}h` : ""}.
               </>
             ) : (
               <>
-                No titles or location set, so the scrape would run against an unfiltered feed.
-                Add them on this page or in Search Settings.
+                No titles set, so this searches your default location without keywords —
+                add job titles for relevant results.
               </>
             )}
           </p>

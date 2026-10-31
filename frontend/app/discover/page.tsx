@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Info, Plus, Radar, Search, Sparkles } from "lucide-react";
+import { Info, Plus, Radar, Search, Sparkles, Trash2 } from "lucide-react";
 
 import { ImportJobDialog } from "@/components/jobs/import-job-dialog";
 import { JobCard } from "@/components/jobs/job-card";
@@ -11,6 +11,7 @@ import {
   JobFiltersPanel,
   type DiscoverFilterState,
 } from "@/components/jobs/job-filters";
+import { PruneJobsDialog } from "@/components/jobs/prune-jobs-dialog";
 import { RefreshControl } from "@/components/jobs/refresh-control";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
@@ -39,6 +40,7 @@ export default function DiscoverPage() {
   const [sort, setSort] = useState<JobSort>("newest");
   const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
+  const [pruneOpen, setPruneOpen] = useState(false);
 
   const { data: sourcesData } = useSources();
   const { data: settings } = useSearchSettings();
@@ -94,6 +96,19 @@ export default function DiscoverPage() {
     include_test_data: filters.includeTestData,
   });
   const facets = facetsQuery.data;
+  const storedLocations = facets?.locations ?? [];
+  // Does *any* stored location share a token with what the user typed? If not,
+  // the database is simply full of results from a different search.
+  const requestedTokens = filters.location
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .filter((token) => token.length > 1);
+  const locationAbsentFromStore =
+    requestedTokens.length > 0 &&
+    storedLocations.length > 0 &&
+    !storedLocations.some((item) =>
+      requestedTokens.every((token) => item.value.toLowerCase().includes(token)),
+    );
 
   const applyFilters = (next: DiscoverFilterState) => {
     setFilters(next);
@@ -260,15 +275,25 @@ export default function DiscoverPage() {
                       {facets?.real_total === 1 ? "" : "s"} stored, but none match the current
                       filters. This page only searches what is already in JobRadar — it does not
                       contact LinkedIn by itself.
-                      {(facets?.locations?.length ?? 0) > 0 ? (
+                      {storedLocations.length > 0 ? (
                         <span className="mt-2 block">
                           Stored locations:{" "}
                           <span className="text-foreground">
-                            {facets?.locations
+                            {storedLocations
                               .slice(0, 4)
                               .map((item) => `${item.value} (${item.count})`)
                               .join(", ")}
+                            {storedLocations.length > 4
+                              ? ` and ${storedLocations.length - 4} more`
+                              : ""}
                           </span>
+                        </span>
+                      ) : null}
+                      {locationAbsentFromStore ? (
+                        <span className="mt-2 block">
+                          None of them mention <strong>{filters.location}</strong>. They were
+                          most likely fetched by an earlier search that did not include it —
+                          LinkedIn answers with a US-wide feed when no location is given.
                         </span>
                       ) : null}
                       <span className="mt-1 block">
@@ -289,18 +314,29 @@ export default function DiscoverPage() {
                   )
                 }
                 action={
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <RefreshControl
-                      compact
-                      search={{
-                        titles: filters.titles,
-                        keywords: filters.keywords,
-                        location: filters.location,
-                        maxAgeHours: filters.maxAgeHours,
-                      }}
-                    />
-                    <Button variant="outline" size="sm" onClick={resetFilters}>
-                      Clear filters
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <RefreshControl
+                        compact
+                        search={{
+                          titles: filters.titles,
+                          keywords: filters.keywords,
+                          location: filters.location,
+                          maxAgeHours: filters.maxAgeHours,
+                        }}
+                      />
+                      <Button variant="outline" size="sm" onClick={resetFilters}>
+                        Clear filters
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => setPruneOpen(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove these {facets?.real_total ?? 0} listings
                     </Button>
                   </div>
                 }
@@ -353,6 +389,12 @@ export default function DiscoverPage() {
       </div>
 
       <ImportJobDialog open={importOpen} onOpenChange={setImportOpen} />
+      <PruneJobsDialog
+        open={pruneOpen}
+        onOpenChange={setPruneOpen}
+        count={facets?.real_total}
+        sources={filters.sources.length > 0 ? filters.sources : undefined}
+      />
     </div>
   );
 }

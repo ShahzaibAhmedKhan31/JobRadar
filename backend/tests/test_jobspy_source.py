@@ -574,9 +574,10 @@ def test_refresh_payload_hints_reach_the_scraper(db, stub_scrape):
     assert calls[0]["results_wanted"] == 15
 
 
-def test_empty_hints_warn_about_an_unfiltered_scrape(db, stub_scrape):
+def test_empty_hints_fall_back_to_the_configured_country(db, stub_scrape):
+    """No title and no location must not mean "scrape a random US feed"."""
     calls, responses = stub_scrape
-    settings = jobspy_settings()
+    settings = jobspy_settings(jobspy_country="pakistan")
     from app.services.refresh import run_refresh
     from app.sources.registry import SourceRegistry
 
@@ -589,9 +590,14 @@ def test_empty_hints_warn_about_an_unfiltered_scrape(db, stub_scrape):
         settings=settings,
     )
     assert calls[0]["search_term"] is None
+    assert calls[0]["location"] == "Pakistan"
+    assert outcome.applied_query.location == "Pakistan"
+    assert outcome.location_source == "default"
     warnings = outcome.warnings["linkedin"]
     assert any("without keywords" in warning for warning in warnings)
-    assert any("searched every location" in warning for warning in warnings)
+    # The location is no longer empty, so the "searched every location" warning
+    # must not appear.
+    assert not any("searched every location" in warning for warning in warnings)
 
 
 def test_refresh_api_echoes_the_applied_query(client):

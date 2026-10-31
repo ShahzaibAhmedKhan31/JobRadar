@@ -230,6 +230,8 @@ class JobSpySourceAdapter(SourceAdapter):
 
     site: str = "linkedin"
     max_results_floor = 1
+    #: LinkedIn/Indeed answer with a US-wide feed when nothing is specified.
+    requires_search_scope = True
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()

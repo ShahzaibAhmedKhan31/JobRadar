@@ -266,6 +266,11 @@ page sends exactly what is on screen. Press **Refresh sources**. What to expect:
 * Want Indeed too? Add it: `JOBSPY_SITES=linkedin,indeed`.
 * Want scraping gone entirely? Set `JOBSPY_ENABLED=false` (or do not install the
   extra). Manual import keeps working.
+* **A refresh always searches somewhere.** The location comes from the request,
+  then from Search Settings, then from `JOBSPY_DEFAULT_LOCATION` (or
+  `JOBSPY_COUNTRY`). If all three are empty the request is rejected with a 400
+  instead of scraping: LinkedIn's guest search answers with a US-wide feed when
+  no location is given, which fills the database with unrelated listings.
 * **Sample data is opt-in everywhere.** It is excluded from the job list, the
   facets and dashboard metrics unless `include_test_data=true` (the Discover
   “Include sample data” switch). “Refresh all sources” never loads it — use
@@ -364,7 +369,8 @@ npm run dev
 | `JOBSPY_MAX_SEARCH_TERMS` | `3` | Saved titles/keywords turned into requests (one request each); the response reports the terms that actually ran |
 | `JOBSPY_REQUEST_DELAY_SECONDS` | `2` | Delay between scrape requests (politeness) |
 | `JOBSPY_PROXIES` | *(empty)* | Optional rotating proxies for jobspy |
-| `JOBSPY_COUNTRY` | `pakistan` | Country hint for the Indeed scraper only |
+| `JOBSPY_COUNTRY` | `pakistan` | Country hint for the Indeed scraper; also the fallback search location (see the next row) |
+| `JOBSPY_DEFAULT_LOCATION` | *(empty = the country)* | Where a refresh searches when neither the request nor Search Settings set a location. Without it LinkedIn answers with a US-wide feed |
 | `JOBSPY_FETCH_DESCRIPTION` | `false` | Fetch full descriptions (extra request per listing) |
 | `JOBSPY_VERBOSE` | `0` | jobspy log level: 0 quiet, 1 normal, 2 debug |
 
@@ -444,6 +450,7 @@ Interactive documentation: <http://localhost:8000/docs> (OpenAPI JSON at
 | `GET` | `/api/jobs/{job_id}` | Job detail incl. description and possible duplicates |
 | `POST` | `/api/jobs/refresh` | Refresh one/all real sources (never the sample feed unless `sources: ["fixtures"]`); returns runs, counts, `applied_query` and a message |
 | `GET` | `/api/jobs/refresh-history` | Paginated refresh runs |
+| `POST` | `/api/jobs/prune` | Delete stored listings you never shortlisted or applied to (optional `sources`, `include_test_data`); tracked listings are always kept |
 | `POST` | `/api/jobs/import` | Record a manual listing (returns `201` when created, `200` when it already existed) |
 | `GET` | `/api/shortlist` | Shortlisted jobs (filters: sources, priority, date range, search, sort) |
 | `POST` | `/api/shortlist/{job_id}` | Shortlist a job (idempotent upsert) |

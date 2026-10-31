@@ -92,6 +92,24 @@ class JobFacets(BaseModel):
     newest_first_seen_at: datetime | None = None
 
 
+class PruneJobsRequest(BaseModel):
+    """Remove stored listings the user never shortlisted or applied to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Limit the cleanup to these source keys (default: every source).
+    sources: list[str] | None = Field(default=None, max_length=20)
+    #: Include synthetic sample rows (off by default: they are a demo aid).
+    include_test_data: bool = False
+
+
+class PruneJobsResponse(BaseModel):
+    deleted: int
+    protected: int
+    matched: int
+    message: str
+
+
 class JobPage(Page[JobRead]):
     unknown_published_count: int = 0
     include_test_data: bool = True
