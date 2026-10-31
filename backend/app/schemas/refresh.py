@@ -28,6 +28,41 @@ class RefreshRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=2000)
 
 
+class AppliedQuery(BaseModel):
+    """The search actually sent to the providers for this refresh.
+
+    Echoing it back makes "why did nothing come back?" answerable: a scrape with
+    no terms or no location is a completely different request from a targeted one.
+    """
+
+    terms: list[str] = Field(default_factory=list)
+    location: str | None = None
+    max_age_hours: int | None = None
+    limit: int = 0
+    sources: list[str] = Field(default_factory=list)
+
+    @property
+    def has_terms(self) -> bool:
+        return bool(self.terms)
+
+    def summary(self) -> str:
+        parts: list[str] = []
+        if self.terms:
+            quoted = ", ".join(f'"{term}"' for term in self.terms[:4])
+            if len(self.terms) > 4:
+                quoted += f" +{len(self.terms) - 4} more"
+            parts.append(f"terms {quoted}")
+        else:
+            parts.append("no search terms (unfiltered feed)")
+        if self.location:
+            parts.append(f"in {self.location}")
+        else:
+            parts.append("any location")
+        if self.max_age_hours:
+            parts.append(f"last {self.max_age_hours}h")
+        return " · ".join(parts)
+
+
 class FetchRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,3 +113,5 @@ class RefreshResponse(BaseModel):
     new_jobs: int
     updated_jobs: int
     message: str
+    #: What was actually asked of the providers (None when nothing was attempted).
+    applied_query: AppliedQuery | None = None

@@ -124,11 +124,20 @@ export interface FetchRun {
   warnings?: string[];
 }
 
+export interface AppliedQuery {
+  terms: string[];
+  location: string | null;
+  max_age_hours: number | null;
+  limit: number;
+  sources: string[];
+}
+
 export interface RefreshResponse {
   runs: FetchRun[];
   new_jobs: number;
   updated_jobs: number;
   message: string;
+  applied_query: AppliedQuery | null;
 }
 
 export interface SourceInfo {

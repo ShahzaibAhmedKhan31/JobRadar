@@ -29,6 +29,10 @@ MAX_ERROR_MESSAGE_LENGTH = 4000
 class RefreshOutcome:
     runs: list[JobFetchRun] = field(default_factory=list)
     warnings: dict[str, list[str]] = field(default_factory=dict)
+    #: Search hints that were resolved (request → saved Search Settings → defaults).
+    applied_query: JobQuery | None = None
+    #: Terms the providers were actually queried with, after provider-side caps.
+    applied_terms: list[str] = field(default_factory=list)
 
     @property
     def new_jobs(self) -> int:
@@ -105,7 +109,7 @@ def run_refresh(
         )
 
     fetch_query = apply_saved_search(db, query, settings=settings)
-    outcome = RefreshOutcome()
+    outcome = RefreshOutcome(applied_query=fetch_query)
 
     for adapter in targets:
         run = JobFetchRun(
@@ -133,6 +137,9 @@ def run_refresh(
             )
             if result.warnings:
                 outcome.warnings[adapter.key] = result.warnings
+            for term in result.applied_terms:
+                if term not in outcome.applied_terms:
+                    outcome.applied_terms.append(term)
             errors = [*result.errors, *stats.errors]
             if result.errors and not result.jobs:
                 # The provider itself failed and produced nothing: this is a

@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     jobspy_results_wanted: int = Field(default=25, ge=1, le=200)
     #: How many of the configured titles/keywords are sent to the provider.
     #: Each term is a separate HTTP request, so keep this small.
-    jobspy_max_search_terms: int = Field(default=2, ge=1, le=5)
+    jobspy_max_search_terms: int = Field(default=3, ge=1, le=5)
     #: Minimum delay between two scrape requests (politeness / rate limiting).
     jobspy_request_delay_seconds: float = Field(default=2.0, ge=0, le=60)
     #: Optional HTTP(S) proxies, comma separated, rotated by jobspy.

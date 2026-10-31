@@ -544,3 +544,145 @@ def test_explicit_refresh_hints_win_over_saved_search(db):
     assert resolved.titles == ("Data Engineer",)
     assert resolved.location == "Lahore"
     assert resolved.max_age_hours == 6
+
+
+# ------------------------------------------------- refresh hints → jobspy args
+
+
+def test_refresh_payload_hints_reach_the_scraper(db, stub_scrape):
+    """Titles/location/window from the request must drive the scrape itself."""
+    calls, responses = stub_scrape
+    settings = jobspy_settings()
+    adapter = LinkedInSourceAdapter(settings)
+    from app.services.refresh import run_refresh
+    from app.sources.registry import SourceRegistry
+
+    responses.append(frame([linkedin_row()]))
+    run_refresh(
+        db,
+        requested_sources=["linkedin"],
+        query=JobQuery(
+            titles=("Software Engineer",), location="Karachi, Pakistan", max_age_hours=24, limit=15
+        ),
+        registry=SourceRegistry([adapter]),
+        settings=settings,
+    )
+
+    assert calls[0]["search_term"] == "Software Engineer"
+    assert calls[0]["location"] == "Karachi, Pakistan"
+    assert calls[0]["hours_old"] == 24
+    assert calls[0]["results_wanted"] == 15
+
+
+def test_empty_hints_warn_about_an_unfiltered_scrape(db, stub_scrape):
+    calls, responses = stub_scrape
+    settings = jobspy_settings()
+    from app.services.refresh import run_refresh
+    from app.sources.registry import SourceRegistry
+
+    responses.append(frame([]))
+    outcome = run_refresh(
+        db,
+        requested_sources=["linkedin"],
+        query=JobQuery(),
+        registry=SourceRegistry([LinkedInSourceAdapter(settings)]),
+        settings=settings,
+    )
+    assert calls[0]["search_term"] is None
+    warnings = outcome.warnings["linkedin"]
+    assert any("without keywords" in warning for warning in warnings)
+    assert any("searched every location" in warning for warning in warnings)
+
+
+def test_refresh_api_echoes_the_applied_query(client):
+    """The UI must be able to show what was actually searched."""
+    response = client.post(
+        "/api/jobs/refresh",
+        json={
+            "sources": ["fixtures"],
+            "titles": ["Software Engineer", "AI Engineer"],
+            "location": "Karachi, Pakistan",
+            "max_age_hours": 48,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    applied = payload["applied_query"]
+    assert applied["terms"] == ["Software Engineer", "AI Engineer"]
+    assert applied["location"] == "Karachi, Pakistan"
+    assert applied["max_age_hours"] == 48
+    assert applied["sources"] == ["fixtures"]
+
+
+def test_refresh_falls_back_to_saved_search_and_reports_it(client):
+    client.put(
+        "/api/settings",
+        json={
+            "default_titles": "Backend Engineer, Platform Engineer",
+            "default_location": "Karachi, Pakistan",
+            "default_posting_age_hours": 24,
+        },
+    )
+    payload = client.post("/api/jobs/refresh", json={"sources": ["fixtures"]}).json()
+    applied = payload["applied_query"]
+    assert applied["terms"] == ["Backend Engineer", "Platform Engineer"]
+    assert applied["location"] == "Karachi, Pakistan"
+    assert applied["max_age_hours"] == 24
+
+
+def test_empty_refresh_message_names_the_search(client):
+    payload = client.post(
+        "/api/jobs/refresh",
+        json={"sources": ["fixtures"], "titles": ["Quantum Basket Weaver"], "max_age_hours": 1},
+    ).json()
+    # The sample feed is date-relative, so a 1h window yields nothing; either way
+    # the message must say what was searched when nothing new arrives.
+    if payload["new_jobs"] == 0:
+        assert "Searched" in payload["message"]
+        assert "Quantum Basket Weaver" in payload["message"]
+
+
+def test_applied_terms_report_the_cap_honestly(db, stub_scrape):
+    """If a cap trims the search, the API must not claim the missing terms ran."""
+    _, responses = stub_scrape
+    settings = jobspy_settings(jobspy_max_search_terms=2)
+    from app.services.refresh import run_refresh
+    from app.sources.registry import SourceRegistry
+
+    responses.extend([frame([linkedin_row()]), frame([])])
+    outcome = run_refresh(
+        db,
+        requested_sources=["linkedin"],
+        query=JobQuery(titles=("Software Engineer", "AI Engineer", "Cloud Engineer")),
+        registry=SourceRegistry([LinkedInSourceAdapter(settings)]),
+        settings=settings,
+    )
+    assert outcome.applied_terms == ["Software Engineer", "AI Engineer"]
+
+
+def test_three_terms_are_searched_by_default(db, stub_scrape):
+    calls, responses = stub_scrape
+    from app.services.refresh import run_refresh
+    from app.sources.registry import SourceRegistry
+
+    settings = jobspy_settings(jobspy_max_search_terms=Settings().jobspy_max_search_terms)
+    responses.extend([frame([linkedin_row(id="1")]), frame([linkedin_row(id="2")]), frame([])])
+    outcome = run_refresh(
+        db,
+        requested_sources=["linkedin"],
+        query=JobQuery(
+            titles=("Software Engineer", "AI Engineer", "Cloud Engineer"),
+            location="Karachi, Pakistan",
+            max_age_hours=24,
+        ),
+        registry=SourceRegistry([LinkedInSourceAdapter(settings)]),
+        settings=settings,
+    )
+    assert [call["search_term"] for call in calls] == [
+        "Software Engineer",
+        "AI Engineer",
+        "Cloud Engineer",
+    ]
+    assert all(call["location"] == "Karachi, Pakistan" for call in calls)
+    assert all(call["hours_old"] == 24 for call in calls)
+    assert outcome.applied_terms == ["Software Engineer", "AI Engineer", "Cloud Engineer"]

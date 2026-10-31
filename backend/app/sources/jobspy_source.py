@@ -307,8 +307,19 @@ class JobSpySourceAdapter(SourceAdapter):
 
         limit = max(self.max_results_floor, min(query.limit, self.settings.jobspy_results_wanted))
         terms = self._search_terms(query)
-        result = FetchResult()
+        result = FetchResult(applied_terms=[term for term in terms if term])
         seen: set[str] = set()
+        if terms == [None]:
+            result.warnings.append(
+                f"No search terms were configured, so {self.name} was queried without "
+                "keywords. Add job titles in Search Settings (or type them on the "
+                "Discover page) and refresh again for relevant results."
+            )
+        if not query.location:
+            result.warnings.append(
+                f"No location was configured, so {self.name} searched every location. "
+                "Set a location such as 'Karachi, Pakistan' for local results."
+            )
 
         for index, term in enumerate(terms):
             page = self._scrape_once(

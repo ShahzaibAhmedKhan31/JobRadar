@@ -111,6 +111,9 @@ class FetchResult:
     pages_fetched: int = 0
     #: Retrieval problems reported by the provider (not row-level rejects).
     errors: list[str] = field(default_factory=list)
+    #: Search terms the provider was actually queried with (may be fewer than
+    #: requested when a cap applies), for accurate reporting upstream.
+    applied_terms: list[str] = field(default_factory=list)
 
     def __len__(self) -> int:  # pragma: no cover - convenience
         return len(self.jobs)

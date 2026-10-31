@@ -26,6 +26,7 @@ from app.schemas.job import (
     job_to_read,
 )
 from app.schemas.refresh import (
+    AppliedQuery,
     FetchRunRead,
     RefreshRequest,
     RefreshResponse,
@@ -174,6 +175,17 @@ def refresh_jobs(
     ]
     skipped = sum(1 for run in outcome.runs if run.status is FetchRunStatus.SKIPPED)
     failed = sum(1 for run in outcome.runs if run.status is FetchRunStatus.FAILED)
+    applied = None
+    if outcome.applied_query is not None:
+        requested = list(outcome.applied_query.titles) + list(outcome.applied_query.keywords)
+        applied = AppliedQuery(
+            # Providers may cap how many terms they search; report what ran.
+            terms=outcome.applied_terms or requested,
+            location=outcome.applied_query.location,
+            max_age_hours=outcome.applied_query.max_age_hours,
+            limit=outcome.applied_query.limit,
+            sources=[run.source for run in outcome.runs],
+        )
     parts: list[str] = []
     if outcome.new_jobs:
         parts.append(f"{outcome.new_jobs} new")
@@ -186,11 +198,16 @@ def refresh_jobs(
         message += f" {skipped} source(s) skipped."
     if failed:
         message += f" {failed} source(s) failed."
+    if applied is not None and not outcome.new_jobs:
+        # Nothing came back: say exactly what was asked so the user can compare
+        # it with a search that works for them.
+        message += f" Searched {applied.summary()}."
     return RefreshResponse(
         runs=runs,
         new_jobs=outcome.new_jobs,
         updated_jobs=outcome.updated_jobs,
         message=message,
+        applied_query=applied,
     )
 
 

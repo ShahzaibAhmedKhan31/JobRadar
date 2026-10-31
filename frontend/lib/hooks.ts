@@ -243,13 +243,26 @@ export function useRefreshJobs() {
     mutationFn: refreshJobs,
     onSuccess: (data) => {
       invalidate();
+      const details: string[] = [];
+      if (data.applied_query && data.new_jobs === 0) {
+        const query = data.applied_query;
+        const terms =
+          query.terms.length > 0
+            ? query.terms.map((term) => `"${term}"`).join(", ")
+            : "an unfiltered feed";
+        const where = query.location ? ` in ${query.location}` : " (no location)";
+        const age = query.max_age_hours ? ` · last ${query.max_age_hours}h` : "";
+        details.push(`Searched ${terms}${where}${age}`);
+      }
+      data.runs.forEach((run) => {
+        const error = run.error_message
+          ? ` — ${run.error_message.slice(0, 140)}${run.error_message.length > 140 ? "…" : ""}`
+          : "";
+        details.push(`${run.source_label}: ${run.status}${error}`);
+      });
       toast.success(data.message, {
-        description:
-          data.runs.length > 0
-            ? data.runs
-                .map((run) => `${run.source_label}: ${run.status}`)
-                .join(" · ")
-            : undefined,
+        description: details.length > 0 ? details.join(" · ") : undefined,
+        duration: data.new_jobs === 0 ? 9000 : 5000,
       });
     },
     onError: (error) => toast.error(errorMessage(error)),

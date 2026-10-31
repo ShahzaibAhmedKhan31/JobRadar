@@ -245,13 +245,13 @@ pip install -r backend/requirements-scraping.txt
 JOBSPY_ENABLED=true
 JOBSPY_SITES=linkedin
 JOBSPY_RESULTS_WANTED=25
-JOBSPY_MAX_SEARCH_TERMS=2
+JOBSPY_MAX_SEARCH_TERMS=3
 JOBSPY_REQUEST_DELAY_SECONDS=2
 ```
 
-Restart the API, open **Search Settings**, fill in your role titles (e.g.
-`Backend Engineer, Platform Engineer`), keywords and city, then press **Refresh
-sources**. What to expect:
+Restart the API, then either fill in **Search Settings** (titles, keywords, city)
+or type the filters directly on **Discover jobs** — the refresh button on that
+page sends exactly what is on screen. Press **Refresh sources**. What to expect:
 
 * A healthy run stores new listings and shows `success` in refresh history; the
   LinkedIn card becomes **Available** and Discover lists the rows with a
@@ -266,6 +266,15 @@ sources**. What to expect:
 * Want Indeed too? Add it: `JOBSPY_SITES=linkedin,indeed`.
 * Want scraping gone entirely? Set `JOBSPY_ENABLED=false` (or do not install the
   extra). Manual import keeps working.
+* **Discovery does not scrape.** `GET /api/jobs` only searches rows already
+  stored in PostgreSQL; scraping happens on `POST /api/jobs/refresh`. The
+  response echoes `applied_query` (terms, location, window, limit) and, when
+  nothing new arrives, the message states what was searched — so an empty list
+  can be told apart from an empty scrape. If the terms are missing, the run
+  warns that the board was queried without keywords.
+* Each configured title is one HTTP request (capped by
+  `JOBSPY_MAX_SEARCH_TERMS`, default 3), so three roles ≈ three requests with a
+  2 s gap; the response lists the terms that actually ran.
 
 > Verify the live path on your machine after installing: the build environment
 > used to develop this feature could not reach linkedin.com, so the adapter is
@@ -348,7 +357,7 @@ npm run dev
 | `JOBSPY_ENABLED` | `true` | Hard switch for the optional scraping adapter; `false` keeps JobRadar offline |
 | `JOBSPY_SITES` | `linkedin` | Comma-separated boards to scrape (`indeed`, `glassdoor`, … to opt in) |
 | `JOBSPY_RESULTS_WANTED` | `25` | Listings requested per search term |
-| `JOBSPY_MAX_SEARCH_TERMS` | `2` | Saved titles/keywords turned into requests (one request each) |
+| `JOBSPY_MAX_SEARCH_TERMS` | `3` | Saved titles/keywords turned into requests (one request each); the response reports the terms that actually ran |
 | `JOBSPY_REQUEST_DELAY_SECONDS` | `2` | Delay between scrape requests (politeness) |
 | `JOBSPY_PROXIES` | *(empty)* | Optional rotating proxies for jobspy |
 | `JOBSPY_COUNTRY` | `pakistan` | Country hint for the Indeed scraper only |

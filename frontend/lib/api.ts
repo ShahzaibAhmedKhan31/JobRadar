@@ -139,14 +139,16 @@ export function getJob(jobId: string): Promise<Job> {
   return request<Job>(`/api/jobs/${jobId}`);
 }
 
-export function refreshJobs(payload: {
+export interface RefreshJobsPayload {
   sources?: string[];
   titles?: string[];
   keywords?: string[];
   location?: string;
   max_age_hours?: number;
   limit?: number;
-}): Promise<RefreshResponse> {
+}
+
+export function refreshJobs(payload: RefreshJobsPayload): Promise<RefreshResponse> {
   return request<RefreshResponse>("/api/jobs/refresh", {
     method: "POST",
     body: JSON.stringify(payload),

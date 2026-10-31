@@ -61,7 +61,7 @@ JobRadar/
 │   │   ├── services/           # jobs, ingestion, refresh, shortlist, applications, dashboard, scheduler
 │   │   └── sources/            # base contract, registry, jobspy_source, linkedin, indeed, manual_import, fixtures
 │   ├── alembic/                # migrations (head: 868a9d33f328)
-│   ├── tests/                  # 133 pytest tests (PostgreSQL by default, SQLite fallback)
+│   ├── tests/                  # 140 pytest tests (PostgreSQL by default, SQLite fallback)
 │   ├── requirements.txt        # core runtime deps
 │   ├── requirements-dev.txt    # + pytest, httpx, ruff
 │   └── requirements-scraping.txt  # OPTIONAL: python-jobspy (LinkedIn/Indeed)
@@ -106,7 +106,7 @@ Tests (needs PostgreSQL up; creates/drops tables in `jobradar_test` only):
 ```powershell
 docker exec -it jobradar-postgres createdb -U jobradar jobradar_test   # once
 cd backend
-pytest -q                                # 133 passed
+pytest -q                                # 140 passed
 ruff check app tests
 ```
 
@@ -237,7 +237,7 @@ Last verified 2026-10-31 on this branch:
 
 | Check | Result |
 | --- | --- |
-| `pytest -q` (backend) | **133 passed** |
+| `pytest -q` (backend) | **140 passed** |
 | `ruff check app tests` | clean |
 | `alembic check` | “No new upgrade operations detected” (head `868a9d33f328`) |
 | `npx tsc --noEmit` | clean |
@@ -299,6 +299,60 @@ checked through HTTP + API calls).
 ## 10. Session log
 
 Newest first. Each entry: date · what changed · files · verification.
+
+### 2026-10-31 (night) — "the scraper finds nothing" (two-phase discovery)
+
+**Symptom reported:** the standalone `jobspy` script returns jobs for Karachi, but
+`GET /api/jobs?...&sources=linkedin` answers 200 with an empty list, while
+`POST /api/jobs/refresh` seemingly "works".
+
+**Root causes**
+1. `GET /api/jobs` never scrapes — it queries stored rows. Nothing had been
+   imported, so an empty list was correct.
+2. A real parity bug: the Discover page's refresh sent `{}` (no hints), so
+   `apply_saved_search` fell back to Search Settings. With those empty, jobspy
+   was called with `search_term=None` and `location=None` — nothing like the
+   working script's `search_term="Software Engineer"`, `location="Karachi,
+   Pakistan"`, `hours_old=24`. Nothing useful was ever fetched.
+3. `JOBSPY_MAX_SEARCH_TERMS` defaulted to 2, so a three-role search silently
+   dropped the third term while the response implied all three ran.
+
+**Changed**
+* `components/jobs/refresh-control.tsx` — `RefreshControl` now takes
+  `search={{titles, keywords, location, maxAgeHours}}`, exports
+  `buildRefreshPayload()`, and sends those hints with every refresh (all/single
+  source). Its dropdown previews the exact search that will be sent, or warns
+  when it would be unfiltered.
+* `app/discover/page.tsx` — passes the on-screen filters to every refresh
+  trigger, and its empty states say plainly that this page searches **stored**
+  listings, offer “run this search” (refresh with the current criteria), and tip
+  the user to add a location.
+* `components/shared/empty-state.tsx` — `description` accepts rich content.
+* `lib/hooks.ts` — refresh toast shows the applied search and any run error
+  (truncated), and stays visible longer when nothing was imported.
+* Backend: `RefreshResponse.applied_query` (terms, location, max_age_hours,
+  limit, sources) + `AppliedQuery.summary()`; the message appends
+  `Searched terms X · in Y · last Nh` when nothing new arrived.
+  `FetchResult.applied_terms` reports the terms a provider really used, and
+  `RefreshOutcome.applied_terms` feeds `applied_query.terms`, so a cap is never
+  misreported.
+* `jobspy_source.py` — warns when scraping with no search terms and/or no
+  location instead of pretending the empty result is meaningful.
+* `JOBSPY_MAX_SEARCH_TERMS` default 2 → 3 (matches a typical three-role search);
+  README, `backend/.env.example` and the env table updated.
+* 7 new tests (140 total): hints reach `scrape_jobs`, empty-hint warnings,
+  `applied_query` echoed from the API and from saved settings, capped terms
+  reported honestly, three terms searched by default.
+
+**Verification** — against the live API:
+`POST /api/jobs/refresh {titles:[Software Engineer, AI Engineer, Cloud Engineer],
+location:"Karachi, Pakistan", max_age_hours:24, limit:15}` produced three jobspy
+requests to
+`/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=…&location=Karachi%2C+Pakistan&distance=50&f_TPR=r86400&start=0`
+— identical in shape to the working standalone script. The requests fail here
+only because this sandbox cannot reach linkedin.com; the error is stored on the
+run and returned in the toast. `applied_query` echoed all three terms, and
+`GET /api/jobs` correctly reported 0 stored matches afterwards.
 
 ### 2026-10-31 (evening) — stale-database guard
 

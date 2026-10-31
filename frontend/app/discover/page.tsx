@@ -125,7 +125,14 @@ export default function DiscoverPage() {
         description="Filters run against listings already stored in your database. Refresh a source to import the latest postings, then refine your search."
         actions={
           <>
-            <RefreshControl />
+            <RefreshControl
+              search={{
+                titles: filters.titles,
+                keywords: filters.keywords,
+                location: filters.location,
+                maxAgeHours: filters.maxAgeHours,
+              }}
+            />
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Plus className="h-4 w-4" /> Import job link
             </Button>
@@ -234,22 +241,53 @@ export default function DiscoverPage() {
             hasActiveFilters ? (
               <EmptyState
                 icon={<Search className="h-5 w-5" />}
-                title="No jobs match these filters"
-                description="Try widening the posting age, removing a keyword, or including jobs with unknown publication dates."
+                title="Nothing stored matches these filters"
+                description={
+                  <>
+                    This page searches listings <strong>already stored</strong> in JobRadar — it
+                    does not contact LinkedIn on its own. Run the search below to scrape these
+                    exact criteria, then the results appear here.
+                    {filters.location ? null : (
+                      <span className="mt-2 block text-amber-700">
+                        Tip: add a location such as “Karachi, Pakistan” — an unscoped LinkedIn
+                        search returns very little.
+                      </span>
+                    )}
+                  </>
+                }
                 action={
-                  <Button variant="outline" size="sm" onClick={resetFilters}>
-                    Clear filters
-                  </Button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <RefreshControl
+                      compact
+                      search={{
+                        titles: filters.titles,
+                        keywords: filters.keywords,
+                        location: filters.location,
+                        maxAgeHours: filters.maxAgeHours,
+                      }}
+                    />
+                    <Button variant="outline" size="sm" onClick={resetFilters}>
+                      Clear filters
+                    </Button>
+                  </div>
                 }
               />
             ) : (
               <EmptyState
                 icon={<Radar className="h-5 w-5" />}
                 title="No jobs stored yet"
-                description="Refresh a source to import recent listings, or paste a job link you found on LinkedIn or Indeed."
+                description="Press Refresh to scrape LinkedIn using your saved search (titles, location, posting age), or paste a job link you found yourself."
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
-                    <RefreshControl compact />
+                    <RefreshControl
+                      compact
+                      search={{
+                        titles: filters.titles,
+                        keywords: filters.keywords,
+                        location: filters.location,
+                        maxAgeHours: filters.maxAgeHours,
+                      }}
+                    />
                     <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
                       <Plus className="h-3.5 w-3.5" /> Import a link
                     </Button>
