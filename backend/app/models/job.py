@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     Uuid,
+    false,
     func,
     text,
 )
@@ -89,6 +90,11 @@ class Job(Base):
     #: never fabricated from ``first_seen_at``.
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    #: True when the provider only reported a calendar date, so ``published_at``
+    #: is midnight UTC of the posting day (LinkedIn behaves this way).
+    published_at_is_date_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
     )
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()

@@ -51,7 +51,9 @@ class SourceRegistry:
 
         Explicitly requested sources are returned even when unavailable so the
         run history records *why* nothing was imported. Automatic/scheduled
-        refreshes only touch sources that can actually refresh.
+        refreshes only touch sources that can actually refresh, and never load
+        the bundled sample feed: synthetic rows are a deliberate action, not a
+        side effect of "refresh everything".
         """
         enabled = self.enabled(configured_keys)
         if requested:
@@ -59,7 +61,9 @@ class SourceRegistry:
             if not requested_list:
                 return []
             return [self.require(key) for key in requested_list]
-        return [adapter for adapter in enabled if adapter.can_refresh]
+        return [
+            adapter for adapter in enabled if adapter.can_refresh and not adapter.is_test_data
+        ]
 
     def known_keys(self) -> set[str]:
         return set(self._adapters)
@@ -74,8 +78,8 @@ def build_registry(settings: Settings) -> SourceRegistry:
 
     registry = SourceRegistry(
         [
-            LinkedInSourceAdapter(),
-            IndeedSourceAdapter(),
+            LinkedInSourceAdapter(settings),
+            IndeedSourceAdapter(settings),
             ManualImportSourceAdapter(),
             FixtureSourceAdapter(),
         ]

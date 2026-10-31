@@ -28,7 +28,7 @@ from app.schemas.dashboard import (
 )
 from app.schemas.job import job_to_read
 from app.schemas.refresh import fetch_run_to_read
-from app.services.jobs import duplicate_counts
+from app.services.jobs import duplicate_counts, published_since
 from app.sources.labels import source_label
 
 
@@ -64,7 +64,7 @@ def get_summary(
         db,
         select(func.count())
         .select_from(Job)
-        .where(*scope, Job.published_at >= cutoff),
+        .where(*scope, published_since(cutoff)),
     )
     unknown_published_jobs = _count(
         db,

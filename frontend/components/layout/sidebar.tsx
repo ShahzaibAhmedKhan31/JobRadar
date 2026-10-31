@@ -80,7 +80,11 @@ function ApiStatus() {
   const { data, isError, isLoading } = useQuery({
     queryKey: ["health"],
     queryFn: getHealth,
-    refetchInterval: 60_000,
+    // Poll quickly while the API is down so the badge flips back on its own.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "ok" ? 60_000 : 10_000;
+    },
     retry: 0,
   });
 
@@ -101,7 +105,7 @@ function ApiStatus() {
       <p className="mt-1 text-[11px] text-sidebar-muted">
         {healthy
           ? `v${data?.version} · PostgreSQL ${data?.database}`
-          : "Start FastAPI on port 8000"}
+          : "Run: uvicorn app.main:app --port 8000"}
       </p>
     </div>
   );

@@ -66,6 +66,8 @@ export interface Job {
   description_snippet: string | null;
   job_url: string;
   published_at: string | null;
+  /** True when the source only reported the posting date (LinkedIn). */
+  published_at_is_date_only: boolean;
   posting_age_hours: number | null;
   first_seen_at: string;
   discovered_age_hours: number;
@@ -77,6 +79,29 @@ export interface Job {
   possible_duplicate_count: number;
   description?: string | null;
   possible_duplicates?: DuplicateRef[];
+}
+
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+export interface JobFacets {
+  total: number;
+  include_test_data: boolean;
+  real_total: number;
+  sample_total: number;
+  sources: FacetValue[];
+  locations: FacetValue[];
+  companies: FacetValue[];
+  newest_first_seen_at: string | null;
+}
+
+export interface PruneJobsResult {
+  deleted: number;
+  protected: number;
+  matched: number;
+  message: string;
 }
 
 export interface JobPage extends Page<Job> {
@@ -122,11 +147,21 @@ export interface FetchRun {
   warnings?: string[];
 }
 
+export interface AppliedQuery {
+  terms: string[];
+  location: string | null;
+  locations: string[];
+  max_age_hours: number | null;
+  limit: number;
+  sources: string[];
+}
+
 export interface RefreshResponse {
   runs: FetchRun[];
   new_jobs: number;
   updated_jobs: number;
   message: string;
+  applied_query: AppliedQuery | null;
 }
 
 export interface SourceInfo {
@@ -140,6 +175,7 @@ export interface SourceInfo {
   is_test_data: boolean;
   docs_url: string | null;
   required_config: string[];
+  setup_command: string | null;
   stored_jobs_count: number;
   last_run: FetchRun | null;
 }
@@ -217,6 +253,7 @@ export interface JobFilters {
   titles?: string[];
   keywords?: string[];
   location?: string;
+  locations?: string[];
   work_arrangement?: WorkArrangement;
   experience_level?: ExperienceLevel;
   sources?: string[];

@@ -1,0 +1,10 @@
+# Optional scraping extras — NOT installed by requirements.txt.
+#
+# Enables the LinkedIn / Indeed adapters through python-jobspy, which reads the
+# boards' public guest search pages. Scraping may breach the board's terms of
+# service and can be throttled or blocked; enabling it is an explicit choice
+# (JOBSPY_ENABLED=true plus the site listed in JOBSPY_SITES).
+#
+# Install on top of the core requirements:
+#   pip install -r backend/requirements-scraping.txt
+python-jobspy>=1.4,<2.0

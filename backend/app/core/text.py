@@ -56,6 +56,56 @@ def normalize_key(value: str | None) -> str:
     return _WHITESPACE_RE.sub(" ", text).strip()
 
 
+_LOCATION_SPLIT_RE = re.compile(r"[\n;]+")
+_LOCATION_AND_RE = re.compile(r"\s+and\s+", re.IGNORECASE)
+
+
+def _split_place_text(value: str) -> list[str]:
+    """Split one line into places, keeping commas inside each place."""
+    places: list[str] = []
+    for chunk in _LOCATION_SPLIT_RE.split(value):
+        pieces = [chunk]
+        # "Karachi, Pakistan and Islamabad, Pakistan" holds two places, but
+        # "Trinidad and Tobago" is one — only split when every side looks like
+        # "City, Country".
+        if "," in chunk:
+            candidate = _LOCATION_AND_RE.split(chunk)
+            if len(candidate) > 1 and all("," in piece for piece in candidate):
+                pieces = candidate
+        places.extend(pieces)
+    return places
+
+
+def split_locations(
+    values: Iterable[str | None] | None, *, max_locations: int = 5
+) -> list[str]:
+    """Split user input into distinct places.
+
+    Unlike :func:`split_terms` a comma is **not** a separator: it belongs to the
+    place itself (``Karachi, Pakistan``). Newlines and semicolons separate
+    locations, so a single input box can hold several.
+    """
+    if not values:
+        return []
+    seen: set[str] = set()
+    places: list[str] = []
+    for raw in values:
+        if not raw:
+            continue
+        for part in _split_place_text(str(raw)):
+            place = _WHITESPACE_RE.sub(" ", part).strip()[:200]
+            if not place:
+                continue
+            key = place.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            places.append(place)
+            if len(places) >= max_locations:
+                return places
+    return places
+
+
 def split_terms(values: Iterable[str] | None, *, max_terms: int = 10) -> list[str]:
     """Split user input like ``"backend, data  engineer"`` into clean terms."""
     if not values:

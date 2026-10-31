@@ -57,6 +57,8 @@ class JobRead(BaseModel):
     description_snippet: str | None = None
     job_url: str
     published_at: datetime | None = None
+    #: True when the source only reported the posting *date* (LinkedIn).
+    published_at_is_date_only: bool = False
     posting_age_hours: float | None = None
     first_seen_at: datetime
     discovered_age_hours: float
@@ -66,6 +68,46 @@ class JobRead(BaseModel):
     shortlist: ShortlistSummary | None = None
     application: ApplicationSummary | None = None
     possible_duplicate_count: int = 0
+
+
+class FacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class JobFacets(BaseModel):
+    """What is actually stored, independent of the current filters.
+
+    Empty search results are usually a filter/data mismatch, not a bug, so the
+    UI can show the stored locations and companies next to "no jobs match".
+    """
+
+    total: int
+    include_test_data: bool
+    real_total: int
+    sample_total: int
+    sources: list[FacetValue] = []
+    locations: list[FacetValue] = []
+    companies: list[FacetValue] = []
+    newest_first_seen_at: datetime | None = None
+
+
+class PruneJobsRequest(BaseModel):
+    """Remove stored listings the user never shortlisted or applied to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Limit the cleanup to these source keys (default: every source).
+    sources: list[str] | None = Field(default=None, max_length=20)
+    #: Include synthetic sample rows (off by default: they are a demo aid).
+    include_test_data: bool = False
+
+
+class PruneJobsResponse(BaseModel):
+    deleted: int
+    protected: int
+    matched: int
+    message: str
 
 
 class JobPage(Page[JobRead]):
@@ -165,6 +207,7 @@ def job_to_read(
         "description_snippet": snippet(job.description, 220),
         "job_url": job.job_url,
         "published_at": ensure_utc(job.published_at),
+        "published_at_is_date_only": bool(job.published_at_is_date_only),
         "posting_age_hours": posting_age_hours(job),
         "first_seen_at": ensure_utc(job.first_seen_at),
         "discovered_age_hours": round(

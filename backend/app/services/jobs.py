@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, case, func, or_, select
+from sqlalchemy import Select, and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.constants import (
@@ -31,6 +31,8 @@ class JobFilters:
     titles: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
     location: str | None = None
+    #: Additional locations; the job may match any of them (OR).
+    locations: list[str] = field(default_factory=list)
     work_arrangement: WorkArrangement | None = None
     experience_level: ExperienceLevel | None = None
     sources: list[str] = field(default_factory=list)
@@ -44,6 +46,12 @@ class JobFilters:
     def search_terms(self) -> list[str]:
         return split_terms([self.q] if self.q else [], max_terms=5)
 
+    def requested_locations(self) -> list[str]:
+        """Distinct places the user asked for (``location`` plus ``locations``)."""
+        from app.core.text import split_locations
+
+        return split_locations([self.location, *self.locations], max_locations=10)
+
 
 @dataclass(slots=True)
 class JobListResult:
@@ -51,6 +59,18 @@ class JobListResult:
     total: int
     unknown_published_count: int
     duplicate_counts: dict[uuid.UUID, int] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class PruneResult:
+    """Outcome of removing stored listings."""
+
+    #: Rows deleted.
+    deleted: int = 0
+    #: Rows that matched the scope but were kept because they are tracked.
+    protected: int = 0
+    #: Rows that matched the scope before the tracked-job protection.
+    matched: int = 0
 
 
 def _any_field_conditions(term: str, fields: tuple[object, ...]) -> object:
@@ -95,14 +115,11 @@ def _base_conditions(filters: JobFilters) -> list[object]:
             )
         )
 
-    if filters.location and filters.location.strip():
-        location = filters.location.strip()
-        location_condition: object = Job.location.icontains(location, autoescape=True)
-        if location.lower() in REMOTE_TERMS:
-            location_condition = or_(
-                location_condition, Job.work_arrangement == WorkArrangement.REMOTE
-            )
-        conditions.append(location_condition)
+    requested_locations = filters.requested_locations()
+    if requested_locations:
+        # A job may be in any of the requested places ("Karachi, Pakistan" OR
+        # "Islamabad, Pakistan"); within one place every token must match.
+        conditions.append(or_(*(location_conditions(loc) for loc in requested_locations)))
 
     if filters.work_arrangement is not None:
         conditions.append(Job.work_arrangement == filters.work_arrangement)
@@ -127,13 +144,150 @@ def _base_conditions(filters: JobFilters) -> list[object]:
     return conditions
 
 
+def _count(db: Session, statement: object) -> int:
+    return int(db.execute(statement).scalar_one())  # type: ignore[arg-type]
+
+
+def job_facets(
+    db: Session,
+    *,
+    sources: list[str] | None = None,
+    include_test_data: bool = False,
+    limit: int = 12,
+) -> dict[str, object]:
+    """Counts of stored jobs by source/location/company for the empty state."""
+    scope: list[object] = []
+    if sources:
+        scope.append(Job.source.in_(sources))
+
+    def _scoped(*extra: object) -> list[object]:
+        return [*scope, *extra]
+
+    total = _count(db, select(func.count()).select_from(Job).where(*_scoped()))
+    real_total = _count(
+        db,
+        select(func.count()).select_from(Job).where(*_scoped(Job.is_test_data.is_(False))),
+    )
+    sample_total = _count(
+        db,
+        select(func.count()).select_from(Job).where(*_scoped(Job.is_test_data.is_(True))),
+    )
+    data_scope = [] if include_test_data else [Job.is_test_data.is_(False)]
+
+    def _group(column: object) -> list[tuple[str, int]]:
+        rows = db.execute(
+            select(column, func.count())  # type: ignore[arg-type]
+            .select_from(Job)
+            .where(*_scoped(*data_scope), column.is_not(None))  # type: ignore[attr-defined]
+            .group_by(column)  # type: ignore[arg-type]
+            .order_by(func.count().desc())
+            .limit(limit)
+        ).all()
+        return [(str(value), int(count)) for value, count in rows if value]
+
+    newest = db.execute(
+        select(func.max(Job.first_seen_at)).where(*_scoped(*data_scope))
+    ).scalar_one_or_none()
+    return {
+        "total": total,
+        "include_test_data": include_test_data,
+        "real_total": real_total,
+        "sample_total": sample_total,
+        "sources": _group(Job.source),
+        "locations": _group(Job.location),
+        "companies": _group(Job.company_name),
+        "newest_first_seen_at": ensure_utc(newest),
+    }
+
+
+def prune_jobs(
+    db: Session,
+    *,
+    sources: list[str] | None = None,
+    include_test_data: bool = False,
+) -> PruneResult:
+    """Delete stored listings that the user never acted on.
+
+    Scrapers can leave perfectly good but irrelevant rows behind (for example a
+    US-wide feed fetched before a location was configured). Removing them is the
+    only way back to a clean list, but a listing that was shortlisted or turned
+    into an application is the user's own work: those rows are always kept,
+    whatever the scope, because deleting a job cascades to its shortlist entry
+    and application.
+    """
+    conditions: list[object] = []
+    if sources:
+        conditions.append(Job.source.in_(sources))
+    if not include_test_data:
+        conditions.append(Job.is_test_data.is_(False))
+
+    tracked: object = or_(
+        Job.id.in_(select(ShortlistedJob.job_id)),
+        Job.id.in_(select(Application.job_id)),
+    )
+    matched = _count(db, select(func.count()).select_from(Job).where(*conditions))
+    protected = _count(
+        db, select(func.count()).select_from(Job).where(*conditions, tracked)
+    )
+    result = db.execute(
+        delete(Job)
+        .where(*conditions, ~tracked)
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
+    return PruneResult(
+        deleted=int(result.rowcount or 0), protected=protected, matched=matched
+    )
+
+
+def published_since(cutoff: datetime) -> object:
+    """Freshness predicate that respects date-only publication timestamps.
+
+    For rows where the provider reported only a calendar date, ``published_at``
+    is midnight UTC of that day. The true posting moment is somewhere inside
+    ``[published_at, published_at + 24h)``, so the row belongs to the window
+    whenever that day overlaps it — expressed without interval arithmetic so it
+    works on both PostgreSQL and SQLite.
+    """
+    return or_(
+        Job.published_at >= cutoff,
+        and_(
+            Job.published_at_is_date_only.is_(True),
+            Job.published_at > cutoff - timedelta(days=1),
+        ),
+    )
+
+
+def location_conditions(location: str) -> object:
+    """Match a typed location against free-text provider locations.
+
+    Providers do not normalize locations, so an exact substring test fails on
+    perfectly reasonable input: "Karachi, Pakistan" is not a substring of
+    "Karachi, Sindh, Pakistan", and "Karachi" is not a substring of
+    "Karachi Division". Every meaningful token therefore has to be present
+    (AND), which keeps "Karachi, Pakistan" matching both forms while still
+    rejecting "United Arab Emirates".
+    """
+    cleaned = location.strip()
+    tokens = [token for token in split_terms([cleaned], max_terms=6) if len(token) > 1]
+    if not tokens:
+        tokens = [cleaned]
+    conditions: list[object] = [
+        Job.location.icontains(token, autoescape=True) for token in tokens
+    ]
+    combined: object = and_(*conditions) if len(conditions) > 1 else conditions[0]
+    if cleaned.lower() in REMOTE_TERMS:
+        combined = or_(combined, Job.work_arrangement == WorkArrangement.REMOTE)
+    return combined
+
+
 def _published_window_condition(
     filters: JobFilters, *, now: datetime
 ) -> object | None:
     if not filters.max_age_hours:
         return None
     cutoff = now - timedelta(hours=filters.max_age_hours)
-    window: object = Job.published_at >= cutoff
+    window: object = published_since(cutoff)
     if filters.include_unknown_published:
         window = or_(window, Job.published_at.is_(None))
     return window

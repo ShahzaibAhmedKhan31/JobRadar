@@ -5,10 +5,12 @@ import type {
   DashboardSummary,
   FetchRun,
   Job,
+  JobFacets,
   JobFilters,
   JobPage,
   ManualJobImportInput,
   Page,
+  PruneJobsResult,
   RefreshResponse,
   SearchSettings,
   ShortlistEntry,
@@ -95,7 +97,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     throw new ApiError(
-      "Cannot reach the JobRadar API. Is the FastAPI server running on port 8000?",
+      "Cannot reach the JobRadar API — the connection was refused. Is FastAPI " +
+        "running on port 8000, and does API_PROXY_TARGET point at it?",
       0,
     );
   }
@@ -134,18 +137,38 @@ export function getJobs(filters: JobFilters): Promise<JobPage> {
   return request<JobPage>(`/api/jobs${toQueryString(filters)}`);
 }
 
+export function getJobFacets(params: {
+  sources?: string[];
+  include_test_data?: boolean;
+}): Promise<JobFacets> {
+  return request<JobFacets>(`/api/jobs/facets${toQueryString(params)}`);
+}
+
+export function pruneJobs(payload: {
+  sources?: string[];
+  include_test_data?: boolean;
+}): Promise<PruneJobsResult> {
+  return request<PruneJobsResult>("/api/jobs/prune", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getJob(jobId: string): Promise<Job> {
   return request<Job>(`/api/jobs/${jobId}`);
 }
 
-export function refreshJobs(payload: {
+export interface RefreshJobsPayload {
   sources?: string[];
   titles?: string[];
   keywords?: string[];
   location?: string;
+  locations?: string[];
   max_age_hours?: number;
   limit?: number;
-}): Promise<RefreshResponse> {
+}
+
+export function refreshJobs(payload: RefreshJobsPayload): Promise<RefreshResponse> {
   return request<RefreshResponse>("/api/jobs/refresh", {
     method: "POST",
     body: JSON.stringify(payload),

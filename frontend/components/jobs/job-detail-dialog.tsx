@@ -64,6 +64,11 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
                 <dt className="text-muted-foreground">Published</dt>
                 <dd className="mt-0.5 font-medium">
                   {detail.published_at ? formatDateTime(detail.published_at) : "Not provided"}
+                  {detail.published_at_is_date_only ? (
+                    <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                      (date only)
+                    </span>
+                  ) : null}
                 </dd>
               </div>
               <div>

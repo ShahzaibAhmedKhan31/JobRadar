@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Info, Plus, Radar, Search, Sparkles } from "lucide-react";
+import { Info, Plus, Radar, Search, Sparkles, Trash2 } from "lucide-react";
 
 import { ImportJobDialog } from "@/components/jobs/import-job-dialog";
 import { JobCard } from "@/components/jobs/job-card";
@@ -11,6 +11,7 @@ import {
   JobFiltersPanel,
   type DiscoverFilterState,
 } from "@/components/jobs/job-filters";
+import { PruneJobsDialog } from "@/components/jobs/prune-jobs-dialog";
 import { RefreshControl } from "@/components/jobs/refresh-control";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
@@ -26,8 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { JOB_SORT_OPTIONS } from "@/lib/constants";
-import { useJobs, useSearchSettings, useSources } from "@/lib/hooks";
-import { splitTerms } from "@/lib/utils";
+import { useJobFacets, useJobs, useSearchSettings, useSources } from "@/lib/hooks";
+import { splitLocations, splitTerms } from "@/lib/utils";
 import type { JobFilters, JobSort } from "@/types";
 
 const PAGE_SIZE = 10;
@@ -39,6 +40,7 @@ export default function DiscoverPage() {
   const [sort, setSort] = useState<JobSort>("newest");
   const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
+  const [pruneOpen, setPruneOpen] = useState(false);
 
   const { data: sourcesData } = useSources();
   const { data: settings } = useSearchSettings();
@@ -65,12 +67,15 @@ export default function DiscoverPage() {
     }));
   }, [settings]);
 
+  // One place per line; commas stay part of a place ("Karachi, Pakistan").
+  const locationList = useMemo(() => splitLocations(filters.location), [filters.location]);
+
   const apiFilters: JobFilters = useMemo(
     () => ({
       q: searchTerm || undefined,
       titles: splitTerms(filters.titles),
       keywords: splitTerms(filters.keywords),
-      location: filters.location.trim() || undefined,
+      locations: locationList,
       max_age_hours: filters.maxAgeHours === "any" ? undefined : filters.maxAgeHours,
       include_unknown_published: filters.includeUnknownPublished,
       work_arrangement:
@@ -83,10 +88,37 @@ export default function DiscoverPage() {
       page,
       page_size: PAGE_SIZE,
     }),
-    [filters, searchTerm, sort, page],
+    [filters, locationList, searchTerm, sort, page],
   );
 
   const { data, isLoading, isFetching, isError, error, refetch } = useJobs(apiFilters);
+
+  // What is actually stored, ignoring the filters — so an empty page can say why.
+  const facetsQuery = useJobFacets({
+    sources: filters.sources.length > 0 ? filters.sources : [],
+    include_test_data: filters.includeTestData,
+  });
+  const facets = facetsQuery.data;
+  const storedLocations = facets?.locations ?? [];
+  // Does *any* stored location share a token with what the user typed? If not,
+  // the database is simply full of results from a different search.
+  // Does *any* stored location share the tokens of *any* requested place? If
+  // none does, the database is simply full of results from a different search.
+  const locationAbsentFromStore =
+    locationList.length > 0 &&
+    storedLocations.length > 0 &&
+    !locationList.some((place) => {
+      const tokens = place
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter((token) => token.length > 1);
+      return (
+        tokens.length > 0 &&
+        storedLocations.some((item) =>
+          tokens.every((token) => item.value.toLowerCase().includes(token)),
+        )
+      );
+    });
 
   const applyFilters = (next: DiscoverFilterState) => {
     setFilters(next);
@@ -125,7 +157,15 @@ export default function DiscoverPage() {
         description="Filters run against listings already stored in your database. Refresh a source to import the latest postings, then refine your search."
         actions={
           <>
-            <RefreshControl />
+            <RefreshControl
+              search={{
+                titles: filters.titles,
+                keywords: filters.keywords,
+                location: filters.location,
+                locations: locationList,
+                maxAgeHours: filters.maxAgeHours,
+              }}
+            />
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Plus className="h-4 w-4" /> Import job link
             </Button>
@@ -234,22 +274,103 @@ export default function DiscoverPage() {
             hasActiveFilters ? (
               <EmptyState
                 icon={<Search className="h-5 w-5" />}
-                title="No jobs match these filters"
-                description="Try widening the posting age, removing a keyword, or including jobs with unknown publication dates."
+                title={
+                  (facets?.real_total ?? 0) > 0
+                    ? "Nothing stored matches these filters"
+                    : "No real listings stored yet"
+                }
+                description={
+                  (facets?.real_total ?? 0) > 0 ? (
+                    <>
+                      You have <strong>{facets?.real_total}</strong> real listing
+                      {facets?.real_total === 1 ? "" : "s"} stored, but none match the current
+                      filters. This page only searches what is already in JobRadar — it does not
+                      contact LinkedIn by itself.
+                      {storedLocations.length > 0 ? (
+                        <span className="mt-2 block">
+                          Stored locations:{" "}
+                          <span className="text-foreground">
+                            {storedLocations
+                              .slice(0, 4)
+                              .map((item) => `${item.value} (${item.count})`)
+                              .join(", ")}
+                            {storedLocations.length > 4
+                              ? ` and ${storedLocations.length - 4} more`
+                              : ""}
+                          </span>
+                        </span>
+                      ) : null}
+                      {locationAbsentFromStore ? (
+                        <span className="mt-2 block">
+                          None of them mention{" "}
+                          <strong>{locationList.join(" or ")}</strong>. They were most likely
+                          fetched by an earlier search that did not include it — LinkedIn
+                          answers with a US-wide feed when no location is given.
+                        </span>
+                      ) : null}
+                      <span className="mt-1 block">
+                        Adjust a filter, or run this search to fetch more:
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Nothing has been scraped yet. Press the button below to search LinkedIn with
+                      these exact criteria — the results are stored, then listed here.
+                      {locationList.length > 0 ? null : (
+                        <span className="mt-2 block text-amber-700">
+                          Tip: add a location such as “Karachi, Pakistan”. An unscoped LinkedIn
+                          search returns very little.
+                        </span>
+                      )}
+                    </>
+                  )
+                }
                 action={
-                  <Button variant="outline" size="sm" onClick={resetFilters}>
-                    Clear filters
-                  </Button>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <RefreshControl
+                        compact
+                        search={{
+                          titles: filters.titles,
+                          keywords: filters.keywords,
+                          location: filters.location,
+                          locations: locationList,
+                          maxAgeHours: filters.maxAgeHours,
+                        }}
+                      />
+                      <Button variant="outline" size="sm" onClick={resetFilters}>
+                        Clear filters
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => setPruneOpen(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove these {facets?.real_total ?? 0} listings
+                    </Button>
+                  </div>
                 }
               />
             ) : (
               <EmptyState
                 icon={<Radar className="h-5 w-5" />}
                 title="No jobs stored yet"
-                description="Refresh a source to import recent listings, or paste a job link you found on LinkedIn or Indeed."
+                description="Press Refresh to scrape LinkedIn using your saved search (titles, location, posting age), or paste a job link you found yourself."
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
-                    <RefreshControl compact />
+                    <RefreshControl
+                      compact
+                      search={{
+                        titles: filters.titles,
+                        keywords: filters.keywords,
+                        location: filters.location,
+                        locations: locationList,
+                        maxAgeHours: filters.maxAgeHours,
+                      }}
+                    />
                     <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
                       <Plus className="h-3.5 w-3.5" /> Import a link
                     </Button>
@@ -282,6 +403,12 @@ export default function DiscoverPage() {
       </div>
 
       <ImportJobDialog open={importOpen} onOpenChange={setImportOpen} />
+      <PruneJobsDialog
+        open={pruneOpen}
+        onOpenChange={setPruneOpen}
+        count={facets?.real_total}
+        sources={filters.sources.length > 0 ? filters.sources : undefined}
+      />
     </div>
   );
 }

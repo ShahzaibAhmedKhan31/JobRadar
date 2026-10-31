@@ -59,6 +59,19 @@ export function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Human posting age. LinkedIn reports only a calendar date, so the value is a
+ * lower bound and is labelled as such instead of pretending to be exact.
+ */
+export function describePostingAge(
+  hours: number | null | undefined,
+  dateOnly = false,
+): string {
+  if (hours === null || hours === undefined) return "Publication time unknown";
+  const relative = formatHoursAgo(hours);
+  return dateOnly ? `Posted around ${relative} (date only)` : `Posted ${relative}`;
+}
+
 export function relativeFromNow(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -81,6 +94,39 @@ export function domainOf(url: string): string {
 }
 
 /** Split comma/newline separated user input into clean terms. */
+/**
+ * Split the location box into distinct places.
+ *
+ * A comma belongs to the place ("Karachi, Pakistan"), so only newlines and
+ * semicolons separate: one box can hold several places searched individually.
+ */
+export function splitLocations(value: string | null | undefined, limit = 5): string[] {
+  if (!value) return [];
+  const seen = new Set<string>();
+  const places: string[] = [];
+  // "Karachi, Pakistan and Islamabad, Pakistan" is two places; "Trinidad and
+  // Tobago" stays one, so only split when every side looks like "City, Country".
+  const chunks: string[] = [];
+  for (const chunk of value.split(/[\n;]+/)) {
+    const pieces = chunk.split(/\s+and\s+/i);
+    if (chunk.includes(",") && pieces.length > 1 && pieces.every((piece) => piece.includes(","))) {
+      chunks.push(...pieces);
+    } else {
+      chunks.push(chunk);
+    }
+  }
+  for (const part of chunks) {
+    const place = part.trim().replace(/\s+/g, " ");
+    if (!place) continue;
+    const key = place.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    places.push(place);
+    if (places.length >= limit) break;
+  }
+  return places;
+}
+
 export function splitTerms(value: string | null | undefined, limit = 10): string[] {
   if (!value) return [];
   return value

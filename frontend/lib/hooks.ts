@@ -16,12 +16,14 @@ import {
   getApplications,
   getDashboardActivity,
   getDashboardSummary,
+  getJobFacets,
   getJobs,
   getRefreshHistory,
   getSearchSettings,
   getShortlist,
   getSources,
   importJob,
+  pruneJobs,
   refreshJobs,
   removeShortlistEntry,
   updateApplication,
@@ -40,6 +42,8 @@ import type {
 
 export const queryKeys = {
   jobs: (filters: JobFilters) => ["jobs", filters] as const,
+  jobFacets: (params: { sources: string[]; include_test_data: boolean }) =>
+    ["jobs", "facets", params] as const,
   job: (id: string) => ["job", id] as const,
   shortlist: (filters: ShortlistFilters) => ["shortlist", filters] as const,
   applications: (filters: ApplicationFilters) => ["applications", filters] as const,
@@ -68,6 +72,18 @@ export function useJobs(filters: JobFilters) {
   return useQuery({
     queryKey: queryKeys.jobs(filters),
     queryFn: () => getJobs(filters),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * What is stored, ignoring the current filters. Used to explain an empty list:
+ * "you have 25 LinkedIn jobs, none in Karachi" is actionable, a blank page is not.
+ */
+export function useJobFacets(params: { sources: string[]; include_test_data: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.jobFacets(params),
+    queryFn: () => getJobFacets(params),
     placeholderData: keepPreviousData,
   });
 }
@@ -243,14 +259,48 @@ export function useRefreshJobs() {
     mutationFn: refreshJobs,
     onSuccess: (data) => {
       invalidate();
-      toast.success(data.message, {
-        description:
-          data.runs.length > 0
-            ? data.runs
-                .map((run) => `${run.source_label}: ${run.status}`)
-                .join(" · ")
-            : undefined,
+      const details: string[] = [];
+      if (data.applied_query && data.new_jobs === 0) {
+        const query = data.applied_query;
+        const terms =
+          query.terms.length > 0
+            ? query.terms.map((term) => `"${term}"`).join(", ")
+            : "an unfiltered feed";
+        const where = query.locations?.length
+          ? ` in ${query.locations.join(" + ")}`
+          : query.location
+            ? ` in ${query.location}`
+            : " (no location)";
+        const age = query.max_age_hours ? ` · last ${query.max_age_hours}h` : "";
+        details.push(`Searched ${terms}${where}${age}`);
+      }
+      data.runs.forEach((run) => {
+        const error = run.error_message
+          ? ` — ${run.error_message.slice(0, 140)}${run.error_message.length > 140 ? "…" : ""}`
+          : "";
+        details.push(`${run.source_label}: ${run.status}${error}`);
       });
+      toast.success(data.message, {
+        description: details.length > 0 ? details.join(" · ") : undefined,
+        duration: data.new_jobs === 0 ? 9000 : 5000,
+      });
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+}
+
+export function usePruneJobs() {
+  const invalidate = useInvalidateTrackerData();
+  return useMutation({
+    mutationFn: (payload: { sources?: string[]; include_test_data?: boolean }) =>
+      pruneJobs(payload),
+    onSuccess: (data) => {
+      invalidate();
+      if (data.deleted > 0) {
+        toast.success(data.message);
+      } else {
+        toast.info(data.message);
+      }
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

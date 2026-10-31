@@ -1,39 +1,27 @@
-"""Indeed source placeholder.
+"""Indeed source adapter backed by ``python-jobspy``.
 
-Research summary (see ``docs/job-sources.md``): Indeed retired its public
-Publisher Job Search API and no longer issues new keys; the remaining APIs are
-employer/ATS partner programs. Scraping breaches Indeed's Terms of Service, so
-this adapter is intentionally unavailable.
+Indeed retired its public Publisher/Job Search API (the old endpoints answer
+``410 Gone``) and issues no new keys, so the only automated path is Indeed's
+public search pages through ``python-jobspy``. It is disabled by default: add
+``indeed`` to ``JOBSPY_SITES`` to opt in. As with LinkedIn, scraping may breach
+Indeed's Terms of Service, so availability and throttling are reported instead of
+hidden.
 """
 
 from __future__ import annotations
 
-from app.core.constants import SourceAvailability
-from app.sources.base import (
-    FetchResult,
-    JobQuery,
-    SourceAdapter,
-    SourceUnavailableError,
-)
+from app.sources.jobspy_source import JOBSPY_PACKAGE, JobSpySourceAdapter
 
 
-class IndeedSourceAdapter(SourceAdapter):
+class IndeedSourceAdapter(JobSpySourceAdapter):
     key = "indeed"
+    site = "indeed"
     name = "Indeed"
     description = (
-        "Indeed's public job-search API is retired. "
-        "Automatic import is disabled."
+        "Indeed search results retrieved with the optional python-jobspy package. "
+        "Opt-in scraping; Indeed's official job-search API was retired in 2020."
     )
-    availability = SourceAvailability.UNAVAILABLE
-    availability_reason = (
-        "Indeed retired its Publisher Job Search API and does not issue new "
-        "keys; remaining APIs are partner-gated employer tools. Scraping "
-        "breaches Indeed's Terms of Service, so JobRadar does not automate it. "
-        "Use 'Import a job link' to record Indeed roles you find manually."
-    )
-    supports_refresh = False
+    supports_refresh = True
     is_test_data = False
     docs_url = "docs/job-sources.md#indeed"
-
-    def fetch(self, query: JobQuery) -> FetchResult:  # pragma: no cover - guarded
-        raise SourceUnavailableError(self.availability_reason or "Indeed is unavailable.")
+    required_config = (JOBSPY_PACKAGE,)

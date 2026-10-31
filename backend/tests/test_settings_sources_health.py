@@ -86,11 +86,15 @@ def test_sources_metadata(client, db):
     sources = {source["key"]: source for source in response.json()["sources"]}
 
     assert set(sources) == {"linkedin", "indeed", "manual_import", "fixtures"}
-    assert sources["linkedin"]["availability"] == "unavailable"
+    # Scraping is opt-in, so with JOBSPY_ENABLED=false (the test default) the
+    # adapters exist but refuse to run and explain how to turn them on.
+    assert sources["linkedin"]["availability"] == "not_configured"
     assert sources["linkedin"]["can_refresh"] is False
-    assert sources["linkedin"]["supports_refresh"] is False
-    assert "User Agreement" in sources["linkedin"]["availability_reason"]
-    assert sources["indeed"]["availability"] == "unavailable"
+    assert sources["linkedin"]["supports_refresh"] is True
+    assert "JOBSPY_ENABLED" in sources["linkedin"]["availability_reason"]
+    assert sources["linkedin"]["required_config"] == ["python-jobspy"]
+    assert sources["indeed"]["availability"] == "not_configured"
+    assert sources["indeed"]["can_refresh"] is False
     assert sources["fixtures"]["availability"] == "available"
     assert sources["fixtures"]["is_test_data"] is True
     assert sources["manual_import"]["supports_refresh"] is False

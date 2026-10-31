@@ -19,13 +19,18 @@ from app.core.constants import (
 from app.models.fetch_run import JobFetchRun
 from app.schemas.common import Page
 from app.schemas.job import (
+    FacetValue,
     JobDetail,
+    JobFacets,
     JobPage,
     ManualImportResponse,
     ManualJobImport,
+    PruneJobsRequest,
+    PruneJobsResponse,
     job_to_read,
 )
 from app.schemas.refresh import (
+    AppliedQuery,
     FetchRunRead,
     RefreshRequest,
     RefreshResponse,
@@ -53,6 +58,10 @@ def list_jobs(
         list[str] | None, Query(description="Additional skills/keywords")
     ] = None,
     location: Annotated[str | None, Query(max_length=200)] = None,
+    locations: Annotated[
+        list[str] | None,
+        Query(description="One or more locations; repeat the parameter, or use newlines"),
+    ] = None,
     work_arrangement: Annotated[WorkArrangement | None, Query()] = None,
     experience_level: Annotated[ExperienceLevel | None, Query()] = None,
     sources: Annotated[list[str] | None, Query(description="Source keys")] = None,
@@ -64,7 +73,9 @@ def list_jobs(
     ] = False,
     shortlisted: Annotated[bool | None, Query()] = None,
     application_status: Annotated[list[ApplicationStatus] | None, Query()] = None,
-    include_test_data: Annotated[bool, Query()] = True,
+    include_test_data: Annotated[
+        bool, Query(description="Include synthetic sample rows (opt-in)")
+    ] = False,
     sort: Annotated[SortOption, Query()] = SortOption.NEWEST,
 ) -> JobPage:
     if sources:
@@ -79,6 +90,7 @@ def list_jobs(
         titles=titles or [],
         keywords=keywords or [],
         location=location,
+        locations=locations or [],
         work_arrangement=work_arrangement,
         experience_level=experience_level,
         sources=sources or [],
@@ -103,6 +115,78 @@ def list_jobs(
         page_size=pagination.page_size,
         unknown_published_count=result.unknown_published_count,
         include_test_data=include_test_data,
+    )
+
+
+@router.get(
+    "/facets",
+    response_model=JobFacets,
+    summary="What is stored, independent of the current filters",
+)
+def get_job_facets(
+    db: DbSession,
+    sources: Annotated[list[str] | None, Query(description="Source keys")] = None,
+    include_test_data: Annotated[bool, Query()] = False,
+) -> JobFacets:
+    raw = job_service.job_facets(
+        db,
+        sources=sources or [],
+        include_test_data=include_test_data,
+    )
+
+    def _values(key: str) -> list[FacetValue]:
+        return [FacetValue(value=value, count=count) for value, count in raw[key]]  # type: ignore[misc]
+
+    return JobFacets(
+        total=int(raw["total"]),  # type: ignore[arg-type]
+        include_test_data=include_test_data,
+        real_total=int(raw["real_total"]),  # type: ignore[arg-type]
+        sample_total=int(raw["sample_total"]),  # type: ignore[arg-type]
+        sources=_values("sources"),
+        locations=_values("locations"),
+        companies=_values("companies"),
+        newest_first_seen_at=raw["newest_first_seen_at"],  # type: ignore[arg-type]
+    )
+
+
+@router.post(
+    "/prune",
+    response_model=PruneJobsResponse,
+    summary="Delete stored listings you never shortlisted or applied to",
+)
+def prune_stored_jobs(
+    payload: PruneJobsRequest, db: DbSession, registry: RegistryDep
+) -> PruneJobsResponse:
+    """Clean up listings a provider delivered but the user does not want.
+
+    Tracked listings (shortlisted or with an application) are never deleted:
+    they represent the user's own work and the foreign keys cascade.
+    """
+    if payload.sources:
+        unknown = set(payload.sources) - registry.known_keys()
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown source key(s): {', '.join(sorted(unknown))}",
+            )
+    result = job_service.prune_jobs(
+        db, sources=payload.sources, include_test_data=payload.include_test_data
+    )
+    if result.deleted:
+        message = f"Removed {result.deleted} stored listing(s)."
+    elif result.matched:
+        message = "Nothing removed: every matching listing is shortlisted or has an application."
+    else:
+        message = "Nothing stored matches that scope, so nothing was removed."
+    if result.deleted and result.protected:
+        message += (
+            f" Kept {result.protected} listing(s) you had shortlisted or applied to."
+        )
+    return PruneJobsResponse(
+        deleted=result.deleted,
+        protected=result.protected,
+        matched=result.matched,
+        message=message,
     )
 
 
@@ -155,6 +239,7 @@ def refresh_jobs(
         titles=tuple(payload.titles),
         keywords=tuple(payload.keywords),
         location=payload.location,
+        locations=tuple(payload.locations),
         max_age_hours=payload.max_age_hours,
         limit=limit,
     )
@@ -174,6 +259,22 @@ def refresh_jobs(
     ]
     skipped = sum(1 for run in outcome.runs if run.status is FetchRunStatus.SKIPPED)
     failed = sum(1 for run in outcome.runs if run.status is FetchRunStatus.FAILED)
+    applied = None
+    if outcome.applied_query is not None:
+        requested = list(outcome.applied_query.titles) + list(outcome.applied_query.keywords)
+        searched_locations = outcome.applied_locations or list(
+            outcome.applied_query.resolved_locations()
+        )
+        applied = AppliedQuery(
+            # Providers may cap how many terms/locations they search; report
+            # what actually ran.
+            terms=outcome.applied_terms or requested,
+            location=searched_locations[0] if searched_locations else None,
+            locations=searched_locations,
+            max_age_hours=outcome.applied_query.max_age_hours,
+            limit=outcome.applied_query.limit,
+            sources=[run.source for run in outcome.runs],
+        )
     parts: list[str] = []
     if outcome.new_jobs:
         parts.append(f"{outcome.new_jobs} new")
@@ -186,11 +287,22 @@ def refresh_jobs(
         message += f" {skipped} source(s) skipped."
     if failed:
         message += f" {failed} source(s) failed."
+    if applied is not None and not outcome.new_jobs:
+        # Nothing came back: say exactly what was asked so the user can compare
+        # it with a search that works for them.
+        message += f" Searched {applied.summary()}."
+    if applied is not None and outcome.location_source == "default" and applied.locations:
+        default_places = ", ".join(applied.locations[:3])
+        message += (
+            f" No location was set, so the default ({default_places}) was used —"
+            " change it in Search Settings."
+        )
     return RefreshResponse(
         runs=runs,
         new_jobs=outcome.new_jobs,
         updated_jobs=outcome.updated_jobs,
         message=message,
+        applied_query=applied,
     )
 
 

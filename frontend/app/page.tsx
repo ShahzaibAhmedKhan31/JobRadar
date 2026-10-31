@@ -382,7 +382,9 @@ export default function DashboardPage() {
                         <p className="truncate text-xs text-muted-foreground">
                           {job.company_name} · {job.source_label}
                           {job.published_at
-                            ? ` · posted ${formatHoursAgo(job.posting_age_hours)}`
+                            ? ` · posted ${formatHoursAgo(job.posting_age_hours)}${
+                                job.published_at_is_date_only ? " (date only)" : ""
+                              }`
                             : " · publication time unknown"}
                         </p>
                       </div>

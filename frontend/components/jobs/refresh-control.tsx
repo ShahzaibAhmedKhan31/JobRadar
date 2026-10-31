@@ -11,16 +11,69 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { RefreshJobsPayload } from "@/lib/api";
 import { useRefreshJobs, useSources } from "@/lib/hooks";
+import { splitLocations, splitTerms } from "@/lib/utils";
 
-export function RefreshControl({ compact = false }: { compact?: boolean }) {
+/**
+ * Search hints taken from whatever the user is currently looking at.
+ *
+ * Scraping LinkedIn without keywords returns a generic feed, so "Refresh" must
+ * send the filters on screen instead of silently falling back to an empty
+ * query. Providers receive the same shape the standalone jobspy script uses:
+ * one search term per request, plus location and posting age.
+ */
+export interface RefreshSearchHints {
+  titles?: string;
+  keywords?: string;
+  location?: string;
+  /** Explicit list of places (overrides `location` when given). */
+  locations?: string[];
+  maxAgeHours?: number | "any";
+}
+
+const MAX_TERMS = 5;
+
+export function buildRefreshPayload(
+  hints: RefreshSearchHints = {},
+  extra: RefreshJobsPayload = {},
+): RefreshJobsPayload {
+  const titles = splitTerms(hints.titles, MAX_TERMS);
+  const keywords = splitTerms(hints.keywords, MAX_TERMS);
+  const locations =
+    hints.locations && hints.locations.length > 0
+      ? hints.locations
+      : splitLocations(hints.location);
+  return {
+    ...extra,
+    ...(titles.length > 0 ? { titles } : {}),
+    ...(keywords.length > 0 ? { keywords } : {}),
+    ...(locations.length > 0 ? { locations } : {}),
+    ...(typeof hints.maxAgeHours === "number" ? { max_age_hours: hints.maxAgeHours } : {}),
+  };
+}
+
+export function RefreshControl({
+  compact = false,
+  search,
+}: {
+  compact?: boolean;
+  search?: RefreshSearchHints;
+}) {
   const { data } = useSources();
   const refreshMutation = useRefreshJobs();
-  const refreshable = (data?.sources ?? []).filter((source) => source.can_refresh);
+  const refreshable = (data?.sources ?? []).filter(
+    (source) => source.can_refresh && !source.is_test_data,
+  );
+  const sampleSources = (data?.sources ?? []).filter(
+    (source) => source.can_refresh && source.is_test_data,
+  );
   const pending = refreshMutation.isPending;
+  const payload = buildRefreshPayload(search);
 
-  const refreshAll = () => refreshMutation.mutate({});
-  const refreshOne = (source: string) => refreshMutation.mutate({ sources: [source] });
+  const refreshAll = () => refreshMutation.mutate(payload);
+  const refreshOne = (source: string) =>
+    refreshMutation.mutate({ ...payload, sources: [source] });
 
   return (
     <div className="flex items-center">
@@ -35,7 +88,7 @@ export function RefreshControl({ compact = false }: { compact?: boolean }) {
         ) : (
           <RefreshCw className="h-4 w-4" />
         )}
-        {pending ? "Refreshing…" : "Refresh sources"}
+        {pending ? "Searching…" : "Refresh sources"}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -48,7 +101,7 @@ export function RefreshControl({ compact = false }: { compact?: boolean }) {
             <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel>Refresh a single source</DropdownMenuLabel>
           {refreshable.length === 0 ? (
             <DropdownMenuItem disabled>No refreshable sources</DropdownMenuItem>
@@ -61,7 +114,39 @@ export function RefreshControl({ compact = false }: { compact?: boolean }) {
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={refreshAll}>Refresh all sources</DropdownMenuItem>
+          <DropdownMenuItem onClick={refreshAll}>Refresh all real sources</DropdownMenuItem>
+          {sampleSources.map((source) => (
+            <DropdownMenuItem
+              key={source.key}
+              onClick={() => refreshMutation.mutate({ ...payload, sources: [source.key] })}
+            >
+              <span className="flex-1">Load sample data</span>
+              <span className="text-xs text-muted-foreground">{source.stored_jobs_count}</span>
+            </DropdownMenuItem>
+          ))}
+          <p className="px-2 pb-1 pt-2 text-[11px] leading-snug text-muted-foreground">
+            {payload.titles?.length || payload.keywords?.length ? (
+              <>
+                Searches{" "}
+                <span className="font-medium text-foreground">
+                  {[...(payload.titles ?? []), ...(payload.keywords ?? [])].join(", ")}
+                </span>
+                {payload.locations?.length
+                  ? ` in ${payload.locations.join(" + ")}`
+                  : " (default location)"}
+                {payload.max_age_hours ? ` · last ${payload.max_age_hours}h` : ""}
+                {payload.locations && payload.locations.length > 1
+                  ? ` · ${payload.locations.length} locations`
+                  : ""}
+                .
+              </>
+            ) : (
+              <>
+                No titles set, so this searches your default location without keywords —
+                add job titles for relevant results.
+              </>
+            )}
+          </p>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

@@ -58,6 +58,12 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.setdefault("DB_WAIT_ON_STARTUP", "false")
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+# The optional jobspy scraping adapter must never reach the network from the
+# test suite; jobspy-specific tests build their own Settings explicitly.
+os.environ.setdefault("JOBSPY_ENABLED", "false")
+# Tests build the schema from metadata (no alembic_version row), so the startup
+# migration guard must stay out of the way. It has its own test module.
+os.environ.setdefault("SCHEMA_CHECK_ON_STARTUP", "false")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from fastapi.testclient import TestClient  # noqa: E402

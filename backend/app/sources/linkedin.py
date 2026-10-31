@@ -1,40 +1,28 @@
-"""LinkedIn source placeholder.
+"""LinkedIn source adapter backed by ``python-jobspy``.
 
-Research summary (see ``docs/job-sources.md``): LinkedIn exposes no self-serve
-job *search* API. Its Job Posting API is partner-gated and write-oriented
-(publishing your own listings). Automated scraping is prohibited by LinkedIn's
-User Agreement. This adapter therefore reports itself as unavailable instead of
-pretending to work or silently scraping.
+Access summary (see ``docs/job-sources.md``): LinkedIn has no self-serve job
+*search* API — its Job Posting API is partner-gated and write-oriented — so the
+only automated path is the public guest search endpoint that
+``python-jobspy`` reads. That is scraping: it is opt-in, it may breach LinkedIn's
+User Agreement, and it can be throttled or blocked. The adapter advertises that
+honestly through ``availability_reason`` and never hides a failure.
 """
 
 from __future__ import annotations
 
-from app.core.constants import SourceAvailability
-from app.sources.base import (
-    FetchResult,
-    JobQuery,
-    SourceAdapter,
-    SourceUnavailableError,
-)
+from app.sources.jobspy_source import JOBSPY_PACKAGE, JobSpySourceAdapter
 
 
-class LinkedInSourceAdapter(SourceAdapter):
+class LinkedInSourceAdapter(JobSpySourceAdapter):
     key = "linkedin"
+    site = "linkedin"
     name = "LinkedIn"
     description = (
-        "No authorized public job-search API exists for LinkedIn. "
-        "Automatic import is disabled."
+        "LinkedIn guest job search, retrieved with the optional python-jobspy "
+        "package. Opt-in scraping: it may breach LinkedIn's User Agreement and "
+        "can be throttled at any time."
     )
-    availability = SourceAvailability.UNAVAILABLE
-    availability_reason = (
-        "LinkedIn offers no self-serve job-search API. Its Job Posting API is "
-        "partner-gated and intended for publishing listings, and scraping "
-        "violates LinkedIn's User Agreement, so JobRadar does not automate it. "
-        "Use 'Import a job link' to record LinkedIn roles you find manually."
-    )
-    supports_refresh = False
+    supports_refresh = True
     is_test_data = False
     docs_url = "docs/job-sources.md#linkedin"
-
-    def fetch(self, query: JobQuery) -> FetchResult:  # pragma: no cover - guarded
-        raise SourceUnavailableError(self.availability_reason or "LinkedIn is unavailable.")
+    required_config = (JOBSPY_PACKAGE,)
