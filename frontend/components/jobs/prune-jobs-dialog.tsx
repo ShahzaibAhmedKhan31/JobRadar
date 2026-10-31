@@ -61,8 +61,8 @@ export function PruneJobsDialog({
             ) : (
               "the stored listings"
             )}{" "}
-            in this scope. Listings you shortlisted or applied to are always kept, and a
-            later refresh can fetch the others again.
+            that do not match your current filters. Listings you shortlisted or applied to
+            are always kept, and a later refresh can fetch the rest again.
           </DialogDescription>
         </DialogHeader>
         <p className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900">
