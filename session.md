@@ -321,6 +321,23 @@ terminal).
 failures (unused port, wrong `DATABASE_URL`) produce the intended FAIL lines;
 `tsc --noEmit` clean, `eslint` clean, `next build` succeeds.
 
+**Follow-up (same day):** the reporter's `curl.exe http://127.0.0.1:8000/health`
+returned a healthy payload, proving the API was up and the earlier refusals were
+a *timing* problem (page opened while uvicorn was down/restarting). Measured the
+exact behaviour: with the API stopped the Next proxy answers `500` immediately;
+after starting it again the same `/health` through the proxy returns `200`
+without restarting Next — only the client-side query has to run again. So the UI
+now heals itself:
+
+* `app/providers.tsx` — React Query retries `ApiError.status === 0`
+  (connection refused) up to 5 times with exponential backoff (1s → 8s), keeps
+  one retry for real API errors, and refetches on window focus/reconnect.
+* `components/shared/error-state.tsx` — while the backend is unreachable the
+  panel retries every 5s (max ~2 min) with a live “retrying automatically” note
+  and a `curl.exe` hint, and clears itself when the API answers.
+* `components/layout/sidebar.tsx` — health badge polls every 10s while down and
+  60s while healthy, so “API unavailable” flips back on its own.
+
 ### 2026-10-31 — LinkedIn/Indeed scraping via python-jobspy + this handoff file
 
 **Added**
