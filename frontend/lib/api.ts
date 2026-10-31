@@ -95,7 +95,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     throw new ApiError(
-      "Cannot reach the JobRadar API. Is the FastAPI server running on port 8000?",
+      "Cannot reach the JobRadar API — the connection was refused. Is FastAPI " +
+        "running on port 8000, and does API_PROXY_TARGET point at it?",
       0,
     );
   }

@@ -101,7 +101,7 @@ function ApiStatus() {
       <p className="mt-1 text-[11px] text-sidebar-muted">
         {healthy
           ? `v${data?.version} · PostgreSQL ${data?.database}`
-          : "Start FastAPI on port 8000"}
+          : "Run: uvicorn app.main:app --port 8000"}
       </p>
     </div>
   );

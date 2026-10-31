@@ -49,6 +49,7 @@ JobRadar/
 ├── docs/job-sources.md         # access assessment, adapter contract, dedupe rules
 ├── README.md                   # full Windows/macOS/Linux setup + API + troubleshooting
 ├── session.md                  # this file
+├── scripts/preflight.py        # environment doctor (DB, migrations, ports, deps)
 ├── backend/
 │   ├── app/
 │   │   ├── main.py             # FastAPI app factory, lifespan, /health
@@ -235,6 +236,7 @@ Last verified 2026-10-31 on this branch:
 | `npx tsc --noEmit` | clean |
 | `npm run lint` | 0 problems |
 | `npm run build` | success — `/`, `/discover`, `/shortlist`, `/applications`, `/settings`, `/_not-found` |
+| `scripts/preflight.py` | PASS on all required checks (DB, migrations, ports, deps); FAIL messages verified with an unreachable port and a wrong `DATABASE_URL` |
 | Pages through the Next proxy | `/` 200, `/discover` 200, `/shortlist` 200, `/applications` 200, `/settings` 200, unknown route 404, `/docs` 200 |
 | `/api/sources` live | `linkedin available` (jobspy installed), `indeed not_configured` + `set JOBSPY_SITES=linkedin, indeed`, `fixtures available` |
 | Live jobspy attempt | Real HTTPS request to `www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=…&start=0`; the sandbox proxy closed the TLS connection → run stored as `failed` with the exact provider message (proves the error path, **not** a successful scrape) |
@@ -290,6 +292,34 @@ checked through HTTP + API calls).
 ## 10. Session log
 
 Newest first. Each entry: date · what changed · files · verification.
+
+### 2026-10-31 (later) — "connection refused" support work
+
+**Symptom reported:** `Failed to proxy http://127.0.0.1:8000/health Error: connect
+ECONNREFUSED` in the Next.js log on Windows. The frontend was fine; nothing was
+listening on 8000, i.e. uvicorn had exited (or was never started in a second
+terminal).
+
+**Added**
+* `scripts/preflight.py` — environment doctor. Checks Python version, backend
+  imports, `.env` files, database connectivity (with the real URL, password
+  masked), Alembic head vs database version, `node`/`node_modules`, port 8000
+  (`/health`) and 3000, and the optional jobspy install; every failure prints the
+  exact command that fixes it. Exit code 1 when a required check fails.
+* `ErrorState` now detects `ApiError` with `status === 0` and renders a
+  “Backend not reachable” panel with the uvicorn command and a pointer to the
+  preflight script, instead of a generic error.
+* README: “First stop: run the preflight doctor” section, a six-cause
+  `ECONNREFUSED` checklist, five new troubleshooting rows, and the script in the
+  repo map / quick start.
+
+**Changed**
+* `lib/api.ts` — refused-connection message now also mentions `API_PROXY_TARGET`.
+* Sidebar API widget shows `Run: uvicorn app.main:app --port 8000`.
+
+**Verification** — `preflight.py` passes against the live local stack; simulated
+failures (unused port, wrong `DATABASE_URL`) produce the intended FAIL lines;
+`tsc --noEmit` clean, `eslint` clean, `next build` succeeds.
 
 ### 2026-10-31 — LinkedIn/Indeed scraping via python-jobspy + this handoff file
 

@@ -200,7 +200,9 @@ If PowerShell blocks activation:
 * API: <http://localhost:8000>
 * Swagger UI: <http://localhost:8000/docs>
 
-Leave this terminal running.
+Leave this terminal running. If anything looks wrong later, run
+`.\.venv\Scripts\python.exe scripts\preflight.py` from the repository root —
+it names the failing piece and the command that fixes it.
 
 ### 5. Set up and run the frontend
 
@@ -504,6 +506,56 @@ Stop the API and frontend with `Ctrl+C` in their terminals.
 
 ## Troubleshooting
 
+### First stop: run the preflight doctor
+
+When the UI shows errors (for example `connect ECONNREFUSED 127.0.0.1:8000`),
+run this from the repository root with the **backend virtualenv** Python. It
+checks Python, dependencies, `.env` files, the database, migrations, ports,
+frontend dependencies and the scraping extra, and prints the exact fix:
+
+```powershell
+# Windows (repo root)
+.\.venv\Scripts\python.exe scripts\preflight.py
+# macOS / Linux
+./.venv/bin/python scripts/preflight.py
+```
+
+Typical output when the API was never started:
+
+```
+[FAIL] FastAPI on port 8000   nothing is listening — the frontend proxy cannot reach it
+       -> Start it in a second terminal: cd backend; uvicorn app.main:app --reload --port 8000
+```
+
+### `connect ECONNREFUSED 127.0.0.1:8000` in the Next.js log
+
+The frontend is fine; FastAPI is not listening. In order of likelihood:
+
+1. **The backend terminal exited.** Scroll up in that window — the cause is
+   there. If PostgreSQL was not up, uvicorn fails during the startup DB wait.
+   Start it with `docker compose up -d postgres` (Docker Desktop must be running)
+   and check `docker compose ps` reports `healthy`.
+2. **Wrong folder.** `uvicorn app.main:app` only works from `backend/`; from the
+   repository root it exits with `ModuleNotFoundError: No module named 'app'`.
+3. **Port already taken.** uvicorn prints `[Errno 10048] error while attempting
+   to bind on address ('127.0.0.1', 8000)`. Find it with
+   `netstat -ano | findstr :8000`, then either stop that process or run
+   `uvicorn app.main:app --port 8001` and set `API_PROXY_TARGET=http://127.0.0.1:8001`
+   in `frontend/.env.local` (restart `npm run dev` afterwards).
+4. **Virtualenv not active.** The prompt should start with `(.venv)`; otherwise
+   `uvicorn` is not on PATH at all.
+5. **Backend and frontend in the same terminal.** `Ctrl+C` on the frontend also
+   stopped the API. Use two terminals.
+6. **Only one of them is bound to IPv6.** Keep the API on `127.0.0.1` and the
+   proxy target on `http://127.0.0.1:8000` (both IPv4).
+
+A quick check that the API itself is healthy, independent of the frontend:
+
+```powershell
+curl.exe http://127.0.0.1:8000/health
+# {"status":"ok","database":"ok","version":"0.1.0",...}
+```
+
 | Symptom | Fix |
 | --- | --- |
 | `docker compose` not recognised | Update Docker Desktop (Compose v2) and restart the terminal. |
@@ -512,7 +564,11 @@ Stop the API and frontend with `Ctrl+C` in their terminals.
 | Port 5432 already in use | Set `POSTGRES_PORT=5433` in the root `.env` and update `DATABASE_URL`. |
 | Port 3000 or 8000 in use | Stop the other process or run Next with `npm run dev -- -p 3001` and FastAPI with `--port 8001` (update `API_PROXY_TARGET`). |
 | `alembic: command not found` | Activate the virtualenv first (`.\.venv\Scripts\Activate.ps1`). |
-| Frontend shows “Cannot reach the JobRadar API” | FastAPI must be running on port 8000; check `API_PROXY_TARGET` in `frontend/.env.local`. |
+| `ECONNREFUSED 127.0.0.1:8000` in the Next.js log | FastAPI is not listening — see the section above, then run `scripts/preflight.py`. |
+| `ModuleNotFoundError: No module named 'app'` | You ran `uvicorn` outside `backend/`. `cd backend` first. |
+| `[Errno 10048]` / “address already in use” | Port 8000 is taken: `netstat -ano | findstr :8000`, stop that process, or move the API and set `API_PROXY_TARGET`. |
+| `'uvicorn' is not recognized` | The backend virtualenv is not active (prompt should show `(.venv)`). |
+| Backend exits during “Waiting for database” | PostgreSQL is down or the URL is wrong — `docker compose ps`, then `scripts/preflight.py`. |
 | PowerShell blocks venv activation | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`. |
 | Dashboard shows zeros although sample data exists | Sample rows are excluded by default — use the “Include sample data” toggle. |
 | Tests skip PostgreSQL | Set `TEST_DATABASE_URL` and create the `jobradar_test` database. |
