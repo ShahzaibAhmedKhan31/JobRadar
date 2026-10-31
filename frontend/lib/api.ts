@@ -163,6 +163,7 @@ export interface RefreshJobsPayload {
   titles?: string[];
   keywords?: string[];
   location?: string;
+  locations?: string[];
   max_age_hours?: number;
   limit?: number;
 }

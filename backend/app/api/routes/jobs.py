@@ -58,6 +58,10 @@ def list_jobs(
         list[str] | None, Query(description="Additional skills/keywords")
     ] = None,
     location: Annotated[str | None, Query(max_length=200)] = None,
+    locations: Annotated[
+        list[str] | None,
+        Query(description="One or more locations; repeat the parameter, or use newlines"),
+    ] = None,
     work_arrangement: Annotated[WorkArrangement | None, Query()] = None,
     experience_level: Annotated[ExperienceLevel | None, Query()] = None,
     sources: Annotated[list[str] | None, Query(description="Source keys")] = None,
@@ -86,6 +90,7 @@ def list_jobs(
         titles=titles or [],
         keywords=keywords or [],
         location=location,
+        locations=locations or [],
         work_arrangement=work_arrangement,
         experience_level=experience_level,
         sources=sources or [],
@@ -234,6 +239,7 @@ def refresh_jobs(
         titles=tuple(payload.titles),
         keywords=tuple(payload.keywords),
         location=payload.location,
+        locations=tuple(payload.locations),
         max_age_hours=payload.max_age_hours,
         limit=limit,
     )
@@ -256,10 +262,15 @@ def refresh_jobs(
     applied = None
     if outcome.applied_query is not None:
         requested = list(outcome.applied_query.titles) + list(outcome.applied_query.keywords)
+        searched_locations = outcome.applied_locations or list(
+            outcome.applied_query.resolved_locations()
+        )
         applied = AppliedQuery(
-            # Providers may cap how many terms they search; report what ran.
+            # Providers may cap how many terms/locations they search; report
+            # what actually ran.
             terms=outcome.applied_terms or requested,
-            location=outcome.applied_query.location,
+            location=searched_locations[0] if searched_locations else None,
+            locations=searched_locations,
             max_age_hours=outcome.applied_query.max_age_hours,
             limit=outcome.applied_query.limit,
             sources=[run.source for run in outcome.runs],
@@ -280,13 +291,10 @@ def refresh_jobs(
         # Nothing came back: say exactly what was asked so the user can compare
         # it with a search that works for them.
         message += f" Searched {applied.summary()}."
-    if (
-        applied is not None
-        and outcome.location_source == "default"
-        and applied.location
-    ):
+    if applied is not None and outcome.location_source == "default" and applied.locations:
+        default_places = ", ".join(applied.locations[:3])
         message += (
-            f" No location was set, so the default ({applied.location}) was used —"
+            f" No location was set, so the default ({default_places}) was used —"
             " change it in Search Settings."
         )
     return RefreshResponse(

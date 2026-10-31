@@ -18,7 +18,7 @@ Next.js frontend directly on your machine.
 | Area | Capabilities |
 | --- | --- |
 | **Dashboard** | Live metrics from stored rows: total/discovered jobs, shortlist size, applications submitted, in progress, interviews, offers, upcoming follow-ups. Activity area chart (discovered vs. applied) and recent listings. Sample data is excluded unless you opt in. |
-| **Discover jobs** | Filter by multiple titles, skills/keywords, location/remote, posting age (6/12/24/48 h or 7 days), work arrangement, experience level and source. Full-text search, sorting (newest / best match / oldest / company), pagination. Cards show title, company, location, arrangement, source, publication time + posting age, discovery time, summary, tracking status and duplicate hints. Open the original listing in a new tab, shortlist, or start tracking. |
+| **Discover jobs** | Filter by multiple titles, skills/keywords, several locations (one per line — a job may match any of them) or remote, posting age (6/12/24/48 h or 7 days), work arrangement, experience level and source. Full-text search, sorting (newest / best match / oldest / company), pagination. Cards show title, company, location, arrangement, source, publication time + posting age, discovery time, summary, tracking status and duplicate hints. Open the original listing in a new tab, shortlist, or start tracking. |
 | **Shortlist** | Save/remove jobs, set High/Medium/Low priority, keep private notes, filter by source, priority and date, open the listing, and move a job into the application tracker. Notes and priority survive source refreshes and shortlisting never marks a job as applied. |
 | **Applications** | Seven statuses (Saved, Applied, Assessment, Interview, Offer, Rejected, Withdrawn), application date, follow-up date, resume reference and notes. Table and Kanban board views, search and filters by status/company/date, duplicate prevention, edit/delete. |
 | **Refresh & history** | Manual refresh per source or all sources, with new/updated/unchanged counts and error reporting stored per run. Optional in-process scheduled refresh controlled from Search Settings. |
@@ -271,6 +271,11 @@ page sends exactly what is on screen. Press **Refresh sources**. What to expect:
   `JOBSPY_COUNTRY`). If all three are empty the request is rejected with a 400
   instead of scraping: LinkedIn's guest search answers with a US-wide feed when
   no location is given, which fills the database with unrelated listings.
+* **Several places at once.** Write one per line in the Location box (or
+  separate them with `;`, or "and" between two `City, Country` entries):
+  `Karachi, Pakistan` and `Islamabad, Pakistan` become two requests per term and
+  the list matches **either** place. `JOBSPY_MAX_LOCATIONS` (default 3) caps the
+  traffic; anything skipped is reported as a warning on the run.
 * **Sample data is opt-in everywhere.** It is excluded from the job list, the
   facets and dashboard metrics unless `include_test_data=true` (the Discover
   “Include sample data” switch). “Refresh all sources” never loads it — use
@@ -367,6 +372,7 @@ npm run dev
 | `JOBSPY_SITES` | `linkedin` | Comma-separated boards to scrape (`indeed`, `glassdoor`, … to opt in) |
 | `JOBSPY_RESULTS_WANTED` | `25` | Listings requested per search term |
 | `JOBSPY_MAX_SEARCH_TERMS` | `3` | Saved titles/keywords turned into requests (one request each); the response reports the terms that actually ran |
+| `JOBSPY_MAX_LOCATIONS` | `3` | Locations searched per refresh (each is a separate request per term, so this multiplies the traffic) |
 | `JOBSPY_REQUEST_DELAY_SECONDS` | `2` | Delay between scrape requests (politeness) |
 | `JOBSPY_PROXIES` | *(empty)* | Optional rotating proxies for jobspy |
 | `JOBSPY_COUNTRY` | `pakistan` | Country hint for the Indeed scraper; also the fallback search location (see the next row) |
@@ -445,10 +451,10 @@ Interactive documentation: <http://localhost:8000/docs> (OpenAPI JSON at
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Liveness + database check |
-| `GET` | `/api/jobs` | Filter/sort/paginate stored jobs (`q`, `titles`, `keywords`, `location`, `max_age_hours`, `include_unknown_published`, `work_arrangement`, `experience_level`, `sources`, `shortlisted`, `application_status`, `include_test_data`, `sort`, `page`, `page_size`) |
+| `GET` | `/api/jobs` | Filter/sort/paginate stored jobs (`q`, `titles`, `keywords`, `location`, `locations` (repeatable, OR), `max_age_hours`, `include_unknown_published`, `work_arrangement`, `experience_level`, `sources`, `shortlisted`, `application_status`, `include_test_data`, `sort`, `page`, `page_size`) |
 | `GET` | `/api/jobs/facets` | Stored counts per source/location/company (real vs sample) — used by the Discover empty state |
 | `GET` | `/api/jobs/{job_id}` | Job detail incl. description and possible duplicates |
-| `POST` | `/api/jobs/refresh` | Refresh one/all real sources (never the sample feed unless `sources: ["fixtures"]`); returns runs, counts, `applied_query` and a message |
+| `POST` | `/api/jobs/refresh` | Refresh one/all real sources (never the sample feed unless `sources: ["fixtures"]`); accepts `locations: []` (one request per place per term); returns runs, counts, `applied_query` and a message |
 | `GET` | `/api/jobs/refresh-history` | Paginated refresh runs |
 | `POST` | `/api/jobs/prune` | Delete stored listings you never shortlisted or applied to (optional `sources`, `include_test_data`); tracked listings are always kept |
 | `POST` | `/api/jobs/import` | Record a manual listing (returns `201` when created, `200` when it already existed) |

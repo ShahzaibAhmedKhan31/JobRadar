@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { RefreshJobsPayload } from "@/lib/api";
 import { useRefreshJobs, useSources } from "@/lib/hooks";
-import { splitTerms } from "@/lib/utils";
+import { splitLocations, splitTerms } from "@/lib/utils";
 
 /**
  * Search hints taken from whatever the user is currently looking at.
@@ -27,6 +27,8 @@ export interface RefreshSearchHints {
   titles?: string;
   keywords?: string;
   location?: string;
+  /** Explicit list of places (overrides `location` when given). */
+  locations?: string[];
   maxAgeHours?: number | "any";
 }
 
@@ -38,12 +40,15 @@ export function buildRefreshPayload(
 ): RefreshJobsPayload {
   const titles = splitTerms(hints.titles, MAX_TERMS);
   const keywords = splitTerms(hints.keywords, MAX_TERMS);
-  const location = hints.location?.trim();
+  const locations =
+    hints.locations && hints.locations.length > 0
+      ? hints.locations
+      : splitLocations(hints.location);
   return {
     ...extra,
     ...(titles.length > 0 ? { titles } : {}),
     ...(keywords.length > 0 ? { keywords } : {}),
-    ...(location ? { location } : {}),
+    ...(locations.length > 0 ? { locations } : {}),
     ...(typeof hints.maxAgeHours === "number" ? { max_age_hours: hints.maxAgeHours } : {}),
   };
 }
@@ -126,8 +131,14 @@ export function RefreshControl({
                 <span className="font-medium text-foreground">
                   {[...(payload.titles ?? []), ...(payload.keywords ?? [])].join(", ")}
                 </span>
-                {payload.location ? ` in ${payload.location}` : " (default location)"}
-                {payload.max_age_hours ? ` · last ${payload.max_age_hours}h` : ""}.
+                {payload.locations?.length
+                  ? ` in ${payload.locations.join(" + ")}`
+                  : " (default location)"}
+                {payload.max_age_hours ? ` · last ${payload.max_age_hours}h` : ""}
+                {payload.locations && payload.locations.length > 1
+                  ? ` · ${payload.locations.length} locations`
+                  : ""}
+                .
               </>
             ) : (
               <>

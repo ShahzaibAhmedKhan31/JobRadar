@@ -31,6 +31,8 @@ class JobFilters:
     titles: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
     location: str | None = None
+    #: Additional locations; the job may match any of them (OR).
+    locations: list[str] = field(default_factory=list)
     work_arrangement: WorkArrangement | None = None
     experience_level: ExperienceLevel | None = None
     sources: list[str] = field(default_factory=list)
@@ -43,6 +45,12 @@ class JobFilters:
 
     def search_terms(self) -> list[str]:
         return split_terms([self.q] if self.q else [], max_terms=5)
+
+    def requested_locations(self) -> list[str]:
+        """Distinct places the user asked for (``location`` plus ``locations``)."""
+        from app.core.text import split_locations
+
+        return split_locations([self.location, *self.locations], max_locations=10)
 
 
 @dataclass(slots=True)
@@ -107,8 +115,11 @@ def _base_conditions(filters: JobFilters) -> list[object]:
             )
         )
 
-    if filters.location and filters.location.strip():
-        conditions.append(location_conditions(filters.location))
+    requested_locations = filters.requested_locations()
+    if requested_locations:
+        # A job may be in any of the requested places ("Karachi, Pakistan" OR
+        # "Islamabad, Pakistan"); within one place every token must match.
+        conditions.append(or_(*(location_conditions(loc) for loc in requested_locations)))
 
     if filters.work_arrangement is not None:
         conditions.append(Job.work_arrangement == filters.work_arrangement)

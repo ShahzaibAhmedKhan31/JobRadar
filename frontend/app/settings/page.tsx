@@ -168,8 +168,12 @@ export default function SettingsPage() {
                       onChange={(event) =>
                         setForm({ ...form, default_location: event.target.value })
                       }
-                      placeholder="Karachi, Pakistan"
+                      placeholder="Karachi, Pakistan; Islamabad, Pakistan"
                     />
+                    <p className="text-[11px] text-muted-foreground">
+                      Several places? Separate them with a semicolon — each is searched
+                      separately when a refresh does not carry its own location.
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Posting age window</Label>

@@ -22,6 +22,8 @@ class RefreshRequest(BaseModel):
     titles: list[str] = Field(default_factory=list, max_length=10)
     keywords: list[str] = Field(default_factory=list, max_length=10)
     location: str | None = Field(default=None, max_length=200)
+    #: Extra places to search; each is a separate provider request per term.
+    locations: list[str] = Field(default_factory=list, max_length=10)
     max_age_hours: int | None = Field(default=None, ge=1, le=720)
     work_arrangement: WorkArrangement | None = None
     experience_level: ExperienceLevel | None = None
@@ -36,7 +38,10 @@ class AppliedQuery(BaseModel):
     """
 
     terms: list[str] = Field(default_factory=list)
+    #: First location, kept so older clients keep working.
     location: str | None = None
+    #: Every location that was searched.
+    locations: list[str] = Field(default_factory=list)
     max_age_hours: int | None = None
     limit: int = 0
     sources: list[str] = Field(default_factory=list)
@@ -54,7 +59,14 @@ class AppliedQuery(BaseModel):
             parts.append(f"terms {quoted}")
         else:
             parts.append("no search terms (unfiltered feed)")
-        if self.location:
+        if len(self.locations) > 1:
+            shown = ", ".join(self.locations[:3])
+            if len(self.locations) > 3:
+                shown += f" +{len(self.locations) - 3} more"
+            parts.append(f"in {shown}")
+        elif self.locations:
+            parts.append(f"in {self.locations[0]}")
+        elif self.location:
             parts.append(f"in {self.location}")
         else:
             parts.append("any location")

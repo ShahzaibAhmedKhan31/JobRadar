@@ -108,12 +108,17 @@ export function JobFiltersPanel({ value, sources, onApply, onReset }: JobFilters
 
         <div className="space-y-1.5">
           <Label htmlFor="filter-location">Location</Label>
-          <Input
+          <Textarea
             id="filter-location"
+            rows={2}
             value={draft.location}
             onChange={(event) => update("location", event.target.value)}
-            placeholder="Karachi, Pakistan or Remote"
+            placeholder={"Karachi, Pakistan\nIslamabad, Pakistan"}
           />
+          <p className="text-[11px] text-muted-foreground">
+            One place per line — each is searched separately on refresh and any of them
+            may match. Commas stay part of the place. Use “Remote” for remote roles.
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">

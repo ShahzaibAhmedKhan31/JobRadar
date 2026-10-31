@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     )
     #: Listings requested per search term (jobspy ``results_wanted``).
     jobspy_results_wanted: int = Field(default=25, ge=1, le=200)
+    #: How many locations a single refresh may search (each is a separate
+    #: request per term, so this multiplies the traffic).
+    jobspy_max_locations: int = Field(default=3, ge=1, le=10)
     #: How many of the configured titles/keywords are sent to the provider.
     #: Each term is a separate HTTP request, so keep this small.
     jobspy_max_search_terms: int = Field(default=3, ge=1, le=5)

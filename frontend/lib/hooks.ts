@@ -266,7 +266,11 @@ export function useRefreshJobs() {
           query.terms.length > 0
             ? query.terms.map((term) => `"${term}"`).join(", ")
             : "an unfiltered feed";
-        const where = query.location ? ` in ${query.location}` : " (no location)";
+        const where = query.locations?.length
+          ? ` in ${query.locations.join(" + ")}`
+          : query.location
+            ? ` in ${query.location}`
+            : " (no location)";
         const age = query.max_age_hours ? ` · last ${query.max_age_hours}h` : "";
         details.push(`Searched ${terms}${where}${age}`);
       }

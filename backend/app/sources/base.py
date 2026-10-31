@@ -40,12 +40,23 @@ class JobQuery:
 
     titles: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
+    #: Single location (kept for callers that only ever pass one).
     location: str | None = None
+    #: Additional locations. Every place is searched separately by providers
+    #: that accept one location per request, so "Karachi, Pakistan" and
+    #: "Islamabad, Pakistan" are two searches, not one long string.
+    locations: tuple[str, ...] = ()
     max_age_hours: int | None = None
     limit: int = 100
 
     def keywords_for_provider(self) -> list[str]:
         return [term for term in (*self.titles, *self.keywords) if term.strip()][:10]
+
+    def resolved_locations(self) -> tuple[str, ...]:
+        """Every distinct place to search, ``location`` first."""
+        from app.core.text import split_locations
+
+        return tuple(split_locations([self.location, *self.locations], max_locations=10))
 
 
 @dataclass(slots=True)
@@ -114,6 +125,8 @@ class FetchResult:
     #: Search terms the provider was actually queried with (may be fewer than
     #: requested when a cap applies), for accurate reporting upstream.
     applied_terms: list[str] = field(default_factory=list)
+    #: Locations the provider was actually queried with.
+    applied_locations: list[str] = field(default_factory=list)
 
     def __len__(self) -> int:  # pragma: no cover - convenience
         return len(self.jobs)

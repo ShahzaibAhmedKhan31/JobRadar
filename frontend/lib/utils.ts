@@ -94,6 +94,39 @@ export function domainOf(url: string): string {
 }
 
 /** Split comma/newline separated user input into clean terms. */
+/**
+ * Split the location box into distinct places.
+ *
+ * A comma belongs to the place ("Karachi, Pakistan"), so only newlines and
+ * semicolons separate: one box can hold several places searched individually.
+ */
+export function splitLocations(value: string | null | undefined, limit = 5): string[] {
+  if (!value) return [];
+  const seen = new Set<string>();
+  const places: string[] = [];
+  // "Karachi, Pakistan and Islamabad, Pakistan" is two places; "Trinidad and
+  // Tobago" stays one, so only split when every side looks like "City, Country".
+  const chunks: string[] = [];
+  for (const chunk of value.split(/[\n;]+/)) {
+    const pieces = chunk.split(/\s+and\s+/i);
+    if (chunk.includes(",") && pieces.length > 1 && pieces.every((piece) => piece.includes(","))) {
+      chunks.push(...pieces);
+    } else {
+      chunks.push(chunk);
+    }
+  }
+  for (const part of chunks) {
+    const place = part.trim().replace(/\s+/g, " ");
+    if (!place) continue;
+    const key = place.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    places.push(place);
+    if (places.length >= limit) break;
+  }
+  return places;
+}
+
 export function splitTerms(value: string | null | undefined, limit = 10): string[] {
   if (!value) return [];
   return value

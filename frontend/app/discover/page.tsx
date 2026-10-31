@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { JOB_SORT_OPTIONS } from "@/lib/constants";
 import { useJobFacets, useJobs, useSearchSettings, useSources } from "@/lib/hooks";
-import { splitTerms } from "@/lib/utils";
+import { splitLocations, splitTerms } from "@/lib/utils";
 import type { JobFilters, JobSort } from "@/types";
 
 const PAGE_SIZE = 10;
@@ -67,12 +67,15 @@ export default function DiscoverPage() {
     }));
   }, [settings]);
 
+  // One place per line; commas stay part of a place ("Karachi, Pakistan").
+  const locationList = useMemo(() => splitLocations(filters.location), [filters.location]);
+
   const apiFilters: JobFilters = useMemo(
     () => ({
       q: searchTerm || undefined,
       titles: splitTerms(filters.titles),
       keywords: splitTerms(filters.keywords),
-      location: filters.location.trim() || undefined,
+      locations: locationList,
       max_age_hours: filters.maxAgeHours === "any" ? undefined : filters.maxAgeHours,
       include_unknown_published: filters.includeUnknownPublished,
       work_arrangement:
@@ -85,7 +88,7 @@ export default function DiscoverPage() {
       page,
       page_size: PAGE_SIZE,
     }),
-    [filters, searchTerm, sort, page],
+    [filters, locationList, searchTerm, sort, page],
   );
 
   const { data, isLoading, isFetching, isError, error, refetch } = useJobs(apiFilters);
@@ -99,16 +102,23 @@ export default function DiscoverPage() {
   const storedLocations = facets?.locations ?? [];
   // Does *any* stored location share a token with what the user typed? If not,
   // the database is simply full of results from a different search.
-  const requestedTokens = filters.location
-    .toLowerCase()
-    .split(/[\s,]+/)
-    .filter((token) => token.length > 1);
+  // Does *any* stored location share the tokens of *any* requested place? If
+  // none does, the database is simply full of results from a different search.
   const locationAbsentFromStore =
-    requestedTokens.length > 0 &&
+    locationList.length > 0 &&
     storedLocations.length > 0 &&
-    !storedLocations.some((item) =>
-      requestedTokens.every((token) => item.value.toLowerCase().includes(token)),
-    );
+    !locationList.some((place) => {
+      const tokens = place
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter((token) => token.length > 1);
+      return (
+        tokens.length > 0 &&
+        storedLocations.some((item) =>
+          tokens.every((token) => item.value.toLowerCase().includes(token)),
+        )
+      );
+    });
 
   const applyFilters = (next: DiscoverFilterState) => {
     setFilters(next);
@@ -152,6 +162,7 @@ export default function DiscoverPage() {
                 titles: filters.titles,
                 keywords: filters.keywords,
                 location: filters.location,
+                locations: locationList,
                 maxAgeHours: filters.maxAgeHours,
               }}
             />
@@ -291,9 +302,10 @@ export default function DiscoverPage() {
                       ) : null}
                       {locationAbsentFromStore ? (
                         <span className="mt-2 block">
-                          None of them mention <strong>{filters.location}</strong>. They were
-                          most likely fetched by an earlier search that did not include it —
-                          LinkedIn answers with a US-wide feed when no location is given.
+                          None of them mention{" "}
+                          <strong>{locationList.join(" or ")}</strong>. They were most likely
+                          fetched by an earlier search that did not include it — LinkedIn
+                          answers with a US-wide feed when no location is given.
                         </span>
                       ) : null}
                       <span className="mt-1 block">
@@ -304,7 +316,7 @@ export default function DiscoverPage() {
                     <>
                       Nothing has been scraped yet. Press the button below to search LinkedIn with
                       these exact criteria — the results are stored, then listed here.
-                      {filters.location ? null : (
+                      {locationList.length > 0 ? null : (
                         <span className="mt-2 block text-amber-700">
                           Tip: add a location such as “Karachi, Pakistan”. An unscoped LinkedIn
                           search returns very little.
@@ -322,6 +334,7 @@ export default function DiscoverPage() {
                           titles: filters.titles,
                           keywords: filters.keywords,
                           location: filters.location,
+                          locations: locationList,
                           maxAgeHours: filters.maxAgeHours,
                         }}
                       />
@@ -354,6 +367,7 @@ export default function DiscoverPage() {
                         titles: filters.titles,
                         keywords: filters.keywords,
                         location: filters.location,
+                        locations: locationList,
                         maxAgeHours: filters.maxAgeHours,
                       }}
                     />

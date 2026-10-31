@@ -317,37 +317,61 @@ class JobSpySourceAdapter(SourceAdapter):
                 "keywords. Add job titles in Search Settings (or type them on the "
                 "Discover page) and refresh again for relevant results."
             )
-        if not query.location:
+
+        # One request per (term, location): a board accepts a single location per
+        # search, so "Karachi, Pakistan" plus "Islamabad, Pakistan" means two
+        # queries, not one long string.
+        locations = list(query.resolved_locations())
+        max_locations = max(1, self.settings.jobspy_max_locations)
+        if len(locations) > max_locations:
+            skipped = locations[max_locations:]
+            locations = locations[:max_locations]
+            result.warnings.append(
+                f"Only the first {len(locations)} locations were searched "
+                f"(JOBSPY_MAX_LOCATIONS={max_locations}); skipped: {', '.join(skipped)}."
+            )
+        result.applied_locations = list(locations)
+        search_locations: list[str | None] = list(locations) or [None]
+        if not locations:
             result.warnings.append(
                 f"No location was configured, so {self.name} searched every location. "
                 "Set a location such as 'Karachi, Pakistan' for local results."
             )
 
-        for index, term in enumerate(terms):
-            page = self._scrape_once(
-                term=term,
-                location=query.location,
-                hours_old=query.max_age_hours,
-                limit=limit,
-                delay=self.settings.jobspy_request_delay_seconds if index else 0.0,
-                result=result,
-            )
-            result.pages_fetched += 1
-            for raw in page:
-                job = row_to_job({**raw, "site": self.site})
-                if job is None:
-                    result.warnings.append(
-                        "Skipped a listing without a usable title, company or URL."
-                    )
-                    continue
-                key = (job.source_job_id or job.job_url).lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                result.jobs.append(job)
+        request_index = 0
+        for term in terms:
+            for location in search_locations:
+                page = self._scrape_once(
+                    term=term,
+                    location=location,
+                    hours_old=query.max_age_hours,
+                    limit=limit,
+                    delay=(
+                        self.settings.jobspy_request_delay_seconds if request_index else 0.0
+                    ),
+                    result=result,
+                )
+                request_index += 1
+                result.pages_fetched += 1
+                for raw in page:
+                    job = row_to_job({**raw, "site": self.site})
+                    if job is None:
+                        result.warnings.append(
+                            "Skipped a listing without a usable title, company or URL."
+                        )
+                        continue
+                    key = (job.source_job_id or job.job_url).lower()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    result.jobs.append(job)
 
         if not result.jobs and not result.errors:
-            label = f" for {term!r}" if term else ""
+            label = ""
+            if terms != [None]:
+                label = " for " + ", ".join(repr(term) for term in result.applied_terms[:3])
+            if locations:
+                label += " in " + ", ".join(locations[:3])
             result.warnings.append(
                 f"{self.name} returned no listings{label} within the requested window. "
                 "This can also indicate throttling — check the board manually."

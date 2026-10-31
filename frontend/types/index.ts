@@ -150,6 +150,7 @@ export interface FetchRun {
 export interface AppliedQuery {
   terms: string[];
   location: string | null;
+  locations: string[];
   max_age_hours: number | null;
   limit: number;
   sources: string[];
@@ -252,6 +253,7 @@ export interface JobFilters {
   titles?: string[];
   keywords?: string[];
   location?: string;
+  locations?: string[];
   work_arrangement?: WorkArrangement;
   experience_level?: ExperienceLevel;
   sources?: string[];

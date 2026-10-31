@@ -12,7 +12,7 @@ from app.core.config import Settings, get_settings
 from app.core.constants import FetchRunStatus, RefreshTrigger
 from app.core.errors import BadRequestError
 from app.core.logging import get_logger
-from app.core.text import split_terms
+from app.core.text import split_locations, split_terms
 from app.core.time import ensure_utc, utcnow
 from app.models.fetch_run import JobFetchRun
 from app.services.ingestion import ingest_many
@@ -51,6 +51,8 @@ class RefreshOutcome:
     applied_query: JobQuery | None = None
     #: Terms the providers were actually queried with, after provider-side caps.
     applied_terms: list[str] = field(default_factory=list)
+    #: Locations the providers were actually queried with, after caps.
+    applied_locations: list[str] = field(default_factory=list)
     #: ``request`` / ``saved`` / ``default`` / ``none`` — see ``LOCATION_*``.
     location_source: str = LOCATION_NONE
 
@@ -93,31 +95,32 @@ def resolve_search_scope(
     base = query or JobQuery(limit=settings.max_refresh_jobs_per_source)
     titles = base.titles
     keywords = base.keywords
-    location = base.location
+    locations = list(base.resolved_locations())
     max_age_hours = base.max_age_hours
-    location_source = LOCATION_REQUEST if location else LOCATION_NONE
+    location_source = LOCATION_REQUEST if locations else LOCATION_NONE
 
     row = get_settings_row(db)
     if row is not None:
         titles = titles or tuple(split_terms([row.default_titles]))
         keywords = keywords or tuple(split_terms([row.default_keywords]))
         max_age_hours = max_age_hours or row.default_posting_age_hours
-        if not location and row.default_location:
-            location = row.default_location
-            location_source = LOCATION_SAVED
+        if not locations and row.default_location:
+            locations = split_locations([row.default_location])
+            location_source = LOCATION_SAVED if locations else LOCATION_NONE
 
-    if not location:
+    if not locations:
         fallback = default_search_location(settings)
         if fallback:
-            location = fallback
-            location_source = LOCATION_DEFAULT
+            locations = split_locations([fallback])
+            location_source = LOCATION_DEFAULT if locations else LOCATION_NONE
 
     return (
         replace(
             base,
             titles=titles,
             keywords=keywords,
-            location=location,
+            location=locations[0] if locations else None,
+            locations=tuple(locations),
             max_age_hours=max_age_hours,
         ),
         location_source,
@@ -177,7 +180,7 @@ def run_refresh(
         adapter.requires_search_scope and adapter.can_refresh for adapter in targets
     )
     if needs_scope and not (
-        fetch_query.titles or fetch_query.keywords or fetch_query.location
+        fetch_query.titles or fetch_query.keywords or fetch_query.resolved_locations()
     ):
         raise BadRequestError(
             "A refresh needs at least a job title or a location. Without either, "
@@ -216,6 +219,9 @@ def run_refresh(
             for term in result.applied_terms:
                 if term not in outcome.applied_terms:
                     outcome.applied_terms.append(term)
+            for place in result.applied_locations:
+                if place not in outcome.applied_locations:
+                    outcome.applied_locations.append(place)
             errors = [*result.errors, *stats.errors]
             if result.errors and not result.jobs:
                 # The provider itself failed and produced nothing: this is a

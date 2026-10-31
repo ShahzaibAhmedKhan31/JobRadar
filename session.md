@@ -240,7 +240,7 @@ Last verified 2026-10-31 on this branch:
 
 | Check | Result |
 | --- | --- |
-| `pytest -q` (backend) | **162 passed** |
+| `pytest -q` (backend) | **174 passed** |
 | `ruff check app tests` | clean |
 | `alembic check` | “No new upgrade operations detected” (head `868a9d33f328`) |
 | `npx tsc --noEmit` | clean |
@@ -253,6 +253,7 @@ Last verified 2026-10-31 on this branch:
 | Date-only round trip | Row with `published_at_is_date_only=true` returned by `/api/jobs`, included in a 24h window despite a 38h-old timestamp |
 | Refresh scope live | 5 seeded US LinkedIn rows → `location=Karachi, Pakistan` returns 0 while `/api/jobs/facets` reports `real_total=5` and the US cities; a hint-less refresh reports `applied_query.location="Pakistan"` and says the default was used |
 | Prune live | `POST /api/jobs/prune` → `{deleted: 4, protected: 1, matched: 5}` with one shortlisted row kept; sample rows untouched (26) |
+| Multi-location live | 5 seeded rows (2 Karachi, 1 Lahore, 1 Islamabad, 1 Dubai): `locations=Karachi, Pakistan` → 2, `+locations=Islamabad, Pakistan` → 3 (Lahore/Dubai excluded); refresh echo `locations: ["Karachi, Pakistan", "Islamabad, Pakistan"]` + message “in Karachi, Pakistan, Islamabad, Pakistan” |
 
 What was **not** verified: a successful live LinkedIn scrape (no egress from the
 build sandbox) and browser-level interaction (no browser in the sandbox — UI was
@@ -304,6 +305,46 @@ checked through HTTP + API calls).
 ## 10. Session log
 
 Newest first. Each entry: date · what changed · files · verification.
+
+### 2026-10-31 (later still) — search several cities in one refresh
+
+**Request:** “can we apply multiple location like Karachi, Pakistan and
+Islamabad, Pakistan?” — previously exactly one location was accepted, and the
+input was a single-line box.
+
+**Design** — a board takes one location per query, so several places become
+several requests. Commas are **not** separators (they belong to “Karachi,
+Pakistan”); newlines and semicolons are, and “and” splits two entries only when
+both sides look like `City, Country` (so “Trinidad and Tobago” stays one place).
+Filtering ORs the places together — otherwise half of what was just fetched
+would be hidden.
+
+**Changed — backend**
+* `core/text.split_locations()`; `JobQuery.locations` +
+  `resolved_locations()`; `FetchResult.applied_locations`.
+* `RefreshRequest.locations`; `resolve_search_scope` accepts several places
+  (request, then saved default split on `;`, then `JOBSPY_DEFAULT_LOCATION`).
+* jobspy adapter: one request per (term, location), `JOBSPY_MAX_LOCATIONS`
+  (default 3) with a warning naming anything skipped.
+* `JobFilters.locations` + OR across places; `GET /api/jobs?locations=…`
+  (repeatable) alongside the old `location`.
+* `AppliedQuery.locations` and a summary that lists every place.
+
+**Changed — frontend**
+* Location box is a textarea (one place per line) with a hint; `splitLocations()`
+  in `lib/utils.ts`.
+* Discover sends `locations[]` to both the list and the refresh; the empty state
+  names every requested place; the refresh dropdown shows “in A + B · 2
+  locations”.
+* Settings hints that `default_location` may hold several places separated by
+  `;`.
+
+**Verification**
+* `pytest -q` → **174 passed** (12 new in `tests/test_multi_location.py`), ruff
+  clean, `tsc --noEmit` clean, ESLint clean; `/discover` renders the new hint.
+* Live API: 2 Karachi + 1 Lahore + 1 Islamabad + 1 Dubai seeded →
+  `locations=Karachi, Pakistan` = 2; adding `locations=Islamabad, Pakistan` = 3;
+  refresh echo lists both places. Seeded rows removed afterwards.
 
 ### 2026-10-31 (later) — a refresh always searches somewhere; stray listings can be removed
 
