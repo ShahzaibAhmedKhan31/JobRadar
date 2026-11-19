@@ -296,6 +296,25 @@ page sends exactly what is on screen. Press **Refresh sources**. What to expect:
 
 ---
 
+## Start both development servers in one terminal
+
+After completing the one-time setup above (environment files, dependencies and
+`alembic upgrade head`), start PostgreSQL and run the launcher from the
+repository root using Bash (macOS/Linux, WSL or Git Bash on Windows):
+
+```bash
+docker compose up -d postgres
+./scripts/start.sh
+```
+
+The launcher uses `backend/.venv`, runs the API on port 8000 and the frontend
+on port 3000, and shows both logs in the same terminal. Press **Ctrl+C** to
+stop both servers; if either exits, the other is stopped too. PostgreSQL stays
+running and can be stopped separately with `docker compose stop postgres`. The
+script does not install dependencies, start the database, or run migrations.
+
+---
+
 ## Everyday workflow
 
 1. **Refresh** a source (or enable automatic refresh in Search Settings). With
@@ -546,7 +565,8 @@ docker compose down
 docker compose down -v
 ```
 
-Stop the API and frontend with `Ctrl+C` in their terminals.
+Stop the API and frontend with `Ctrl+C` in their terminals, or press it once
+in the launcher terminal if using `scripts/start.sh`.
 
 ---
 
@@ -590,8 +610,8 @@ The frontend is fine; FastAPI is not listening. In order of likelihood:
    in `frontend/.env.local` (restart `npm run dev` afterwards).
 4. **Virtualenv not active.** The prompt should start with `(.venv)`; otherwise
    `uvicorn` is not on PATH at all.
-5. **Backend and frontend in the same terminal.** `Ctrl+C` on the frontend also
-   stopped the API. Use two terminals.
+5. **A server has stopped.** Start both again with `./scripts/start.sh`, or
+   run them separately in two terminals.
 6. **Only one of them is bound to IPv6.** Keep the API on `127.0.0.1` and the
    proxy target on `http://127.0.0.1:8000` (both IPv4).
 
